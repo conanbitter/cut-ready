@@ -2,8 +2,9 @@
 
 use winit::{
     application::ApplicationHandler,
+    dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
-    event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
 
@@ -14,10 +15,36 @@ struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(event_loop.create_window(Window::default_attributes()).unwrap())
+        if self.window.is_none() {
+            let attributes = Window::default_attributes()
+                .with_title("Cut Ready")
+                .with_inner_size(PhysicalSize::new(1280, 720))
+                .with_visible(false);
+
+            let window = event_loop.create_window(attributes).unwrap();
+
+            let target_monitor = window.current_monitor().or_else(|| window.available_monitors().next());
+
+            if let Some(monitor) = target_monitor {
+                let monitor_size = monitor.size();
+                let window_size = window.outer_size();
+
+                let x = (monitor_size.width.saturating_sub(window_size.width) / 2) as i32;
+                let y = (monitor_size.height.saturating_sub(window_size.height) / 2) as i32;
+
+                let monitor_pos = monitor.position();
+                let centered_pos = PhysicalPosition::new(x + monitor_pos.x, y + monitor_pos.y);
+
+                window.set_outer_position(centered_pos);
+            }
+
+            window.set_visible(true);
+
+            self.window = Some(window);
+        }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
