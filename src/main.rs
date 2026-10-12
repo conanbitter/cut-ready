@@ -1,8 +1,5 @@
-//use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
-
-use std::num::NonZeroU32;
-
 use softbuffer::{Context, Surface};
+use std::num::NonZeroU32;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -11,14 +8,23 @@ use winit::{
     window::{Window, WindowId},
 };
 
+use crate::inker::Inker;
+
+mod inker;
+
+struct AppState {
+    surface: Surface<OwnedDisplayHandle, Window>,
+    inker: Inker,
+}
+
 struct App {
     context: Context<OwnedDisplayHandle>,
-    surface: Option<Surface<OwnedDisplayHandle, Window>>,
+    state: Option<AppState>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.surface.is_none() {
+        if self.state.is_none() {
             let attributes = Window::default_attributes()
                 .with_title("Cut Ready")
                 .with_inner_size(PhysicalSize::new(1280, 720))
@@ -51,12 +57,15 @@ impl ApplicationHandler for App {
                 surface.resize(width, height).unwrap();
             }
 
-            self.surface = Some(surface);
+            self.state = Some(AppState {
+                surface,
+                inker: Inker::new(),
+            });
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        let Some(surface) = self.surface.as_mut() else {
+        let Some(state) = self.state.as_mut() else {
             return;
         };
 
@@ -67,22 +76,23 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
-                    surface.resize(width, height).unwrap();
+                    state.surface.resize(width, height).unwrap();
+                    state.inker.resize(size.width, size.height);
                 }
             }
             WindowEvent::RedrawRequested => {
-                let mut buffer = surface.buffer_mut().unwrap();
+                let data = state.inker.draw();
 
-                // Render into the buffer.
-                for (i, pixel) in buffer.iter_mut().enumerate() {
-                    let red = (i % 255) as u32;
-                    let green = ((i + 50) % 255) as u32;
-                    let blue = ((i + 100) % 255) as u32;
+                let mut buffer = state.surface.buffer_mut().unwrap();
 
-                    *pixel = blue | (green << 8) | (red << 16);
+                for (out_pixel, in_pixel) in buffer.iter_mut().zip(data.as_chunks::<4>().0) {
+                    let red = in_pixel[0] as u32;
+                    let green = in_pixel[1] as u32;
+                    let blue = in_pixel[2] as u32;
+
+                    *out_pixel = blue | (green << 8) | (red << 16);
                 }
 
-                // Send the buffer to the compositor.
                 buffer.present().unwrap();
             }
             _ => (),
@@ -91,32 +101,10 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    /*let mut pixmap = Pixmap::new(256, 256).unwrap();
-    pixmap.fill(Color::WHITE);
-
-    let mut pb = PathBuilder::new();
-    pb.move_to(128.0, 32.0);
-    pb.line_to(224.0, 224.0);
-    pb.line_to(32.0, 224.0);
-    pb.close();
-    let path = pb.finish().unwrap();
-
-    let mut paint = Paint::default();
-    paint.set_color_rgba8(50, 127, 150, 200);
-    paint.anti_alias = true;
-
-    let mut stroke = Stroke::default();
-    stroke.width = 5.0;
-    stroke.line_join = tiny_skia::LineJoin::Round;
-
-    pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-    //pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
-
-    pixmap.save_png("triangle.png").unwrap();*/
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
 
-    let mut app = App { context, surface: None };
+    let mut app = App { context, state: None };
     event_loop.run_app(&mut app).unwrap();
 }
