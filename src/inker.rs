@@ -4,6 +4,9 @@ pub struct Inker {
     pixmap: Pixmap,
     path: Path,
     stroke: Stroke,
+    offset_x: f32,
+    offset_y: f32,
+    scale: f32,
 }
 
 impl Inker {
@@ -23,7 +26,14 @@ impl Inker {
             ..Stroke::default()
         };
 
-        Inker { pixmap, path, stroke }
+        Inker {
+            pixmap,
+            path,
+            stroke,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale: 1.0,
+        }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -34,10 +44,24 @@ impl Inker {
         let mut paint = Paint::default();
         paint.set_color_rgba8(0, 0, 255, 255); //(50, 127, 150, 255);
         paint.anti_alias = true;
+
+        let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
+
+        self.stroke.width = 5.0 / self.scale;
+
         self.pixmap.fill(Color::WHITE);
         self.pixmap
-            .stroke_path(&self.path, &paint, &self.stroke, Transform::identity(), None);
+            .stroke_path(&self.path, &paint, &self.stroke, transform, None);
         //self.pixmap.save_png("test.png").unwrap();
         self.pixmap.data()
+    }
+
+    pub fn pan(&mut self, dx: f32, dy: f32) {
+        self.offset_x += dx / self.scale;
+        self.offset_y += dy / self.scale;
+    }
+
+    pub fn scale(&mut self, dscale: f32) {
+        self.scale *= dscale;
     }
 }

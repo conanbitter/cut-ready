@@ -1,5 +1,5 @@
 use softbuffer::{Context, Surface};
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -13,8 +13,12 @@ use crate::inker::Inker;
 mod inker;
 
 struct AppState {
-    surface: Surface<OwnedDisplayHandle, Window>,
+    window: Rc<Window>,
+    surface: Surface<OwnedDisplayHandle, Rc<Window>>,
     inker: Inker,
+    old_x: f64,
+    old_y: f64,
+    drag: bool,
 }
 
 struct App {
@@ -49,8 +53,9 @@ impl ApplicationHandler for App {
 
             window.set_visible(true);
             let window_size = window.inner_size();
+            let window_rc = Rc::new(window);
 
-            let mut surface = Surface::new(&self.context, window).expect("failed creating surface");
+            let mut surface = Surface::new(&self.context, window_rc.clone()).expect("failed creating surface");
             if let (Some(width), Some(height)) =
                 (NonZeroU32::new(window_size.width), NonZeroU32::new(window_size.height))
             {
@@ -58,14 +63,18 @@ impl ApplicationHandler for App {
             }
 
             self.state = Some(AppState {
+                window: window_rc,
                 surface,
                 inker: Inker::new(),
+                old_x: 0.0,
+                old_y: 0.0,
+                drag: false,
             });
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        let Some(state) = self.state.as_mut() else {
+        let Some(app_state) = self.state.as_mut() else {
             return;
         };
 
@@ -76,14 +85,52 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
-                    state.surface.resize(width, height).unwrap();
-                    state.inker.resize(size.width, size.height);
+                    app_state.surface.resize(width, height).unwrap();
+                    app_state.inker.resize(size.width, size.height);
                 }
             }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => match state {
+                winit::event::ElementState::Pressed => app_state.drag = true,
+                winit::event::ElementState::Released => app_state.drag = false,
+            },
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                if app_state.drag {
+                    let dx = position.x - app_state.old_x;
+                    let dy = position.y - app_state.old_y;
+                    app_state.inker.pan(dx as f32, dy as f32);
+                    //println!("X:{} Y:{}", dx, dy);
+                    app_state.old_x = position.x;
+                    app_state.old_y = position.y;
+                    app_state.window.request_redraw();
+                } else {
+                    app_state.old_x = position.x;
+                    app_state.old_y = position.y;
+                }
+                //println!("X:{} Y:{}", position.x, position.y)
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                    if y > 0.0 {
+                        app_state.inker.scale(1.0 / 0.9);
+                    } else if y < 0.0 {
+                        app_state.inker.scale(0.9);
+                    }
+                    app_state.window.request_redraw();
+                }
+                winit::event::MouseScrollDelta::PixelDelta(_) => {}
+            },
             WindowEvent::RedrawRequested => {
-                let data = state.inker.draw();
+                let data = app_state.inker.draw();
 
-                let mut buffer = state.surface.buffer_mut().unwrap();
+                let mut buffer = app_state.surface.buffer_mut().unwrap();
 
                 for (out_pixel, in_pixel) in buffer.iter_mut().zip(data.as_chunks::<4>().0) {
                     let red = in_pixel[0] as u32;
