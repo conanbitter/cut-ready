@@ -1,4 +1,15 @@
+use std::sync::LazyLock;
+
 use tiny_skia::{Color, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+
+static COLOR_MAIN: LazyLock<Paint> = LazyLock::new(|| paint_from_color(0, 100, 255));
+
+fn paint_from_color(r: u8, g: u8, b: u8) -> Paint<'static> {
+    let mut paint = Paint::default();
+    paint.set_color_rgba8(r, g, b, 255);
+    paint.anti_alias = true;
+    paint
+}
 
 pub struct Inker {
     pixmap: Pixmap,
@@ -41,17 +52,13 @@ impl Inker {
     }
 
     pub fn draw(&mut self) -> &[u8] {
-        let mut paint = Paint::default();
-        paint.set_color_rgba8(0, 0, 255, 255); //(50, 127, 150, 255);
-        paint.anti_alias = true;
-
         let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
 
         self.stroke.width = 5.0 / self.scale;
 
         self.pixmap.fill(Color::WHITE);
         self.pixmap
-            .stroke_path(&self.path, &paint, &self.stroke, transform, None);
+            .stroke_path(&self.path, &COLOR_MAIN, &self.stroke, transform, None);
         //self.pixmap.save_png("test.png").unwrap();
         self.pixmap.data()
     }
