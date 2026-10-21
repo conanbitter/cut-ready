@@ -8,8 +8,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::inker::Inker;
+use crate::{blueprint::load_dxf, inker::Inker};
 
+mod blueprint;
 mod inker;
 
 struct AppState {
@@ -62,10 +63,12 @@ impl ApplicationHandler for App {
                 surface.resize(width, height).unwrap();
             }
 
+            let inker = Inker::new(load_dxf("tests/test.dxf").unwrap());
+
             self.state = Some(AppState {
                 window: window_rc,
                 surface,
-                inker: Inker::new(),
+                inker,
                 old_x: 0.0,
                 old_y: 0.0,
                 drag: false,
@@ -90,9 +93,9 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::MouseInput {
-                device_id,
+                device_id: _,
                 state,
-                button,
+                button: _,
             } => match state {
                 winit::event::ElementState::Pressed => app_state.drag = true,
                 winit::event::ElementState::Released => app_state.drag = false,
@@ -113,9 +116,9 @@ impl ApplicationHandler for App {
                 //println!("X:{} Y:{}", position.x, position.y)
             }
             WindowEvent::MouseWheel {
-                device_id,
+                device_id: _,
                 delta,
-                phase,
+                phase: _,
             } => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
                     if y > 0.0 {

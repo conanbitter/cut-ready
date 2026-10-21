@@ -21,15 +21,8 @@ pub struct Inker {
 }
 
 impl Inker {
-    pub fn new() -> Inker {
+    pub fn new(path: Path) -> Inker {
         let pixmap = Pixmap::new(256, 256).unwrap();
-
-        let mut pb = PathBuilder::new();
-        pb.move_to(128.0, 32.0);
-        pb.line_to(224.0, 224.0);
-        pb.line_to(32.0, 224.0);
-        pb.close();
-        let path = pb.finish().unwrap();
 
         let stroke = Stroke {
             width: 5.0,
