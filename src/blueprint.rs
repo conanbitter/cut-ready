@@ -2,6 +2,22 @@ use dxf::{Drawing, entities::EntityType};
 use std::path::Path;
 use tiny_skia::PathBuilder;
 
+const KAPPA: f64 = 0.5522847498307934;
+
+fn draw_arc(cx: f64, cy: f64, r: f64, pb: &mut PathBuilder) {
+    let kr = KAPPA * r;
+
+    pb.move_to((cx + r) as f32, cy as f32);
+    pb.cubic_to(
+        (cx + r) as f32,
+        (cy + kr) as f32,
+        (cx + kr) as f32,
+        (cy + r) as f32,
+        cx as f32,
+        (cy + r) as f32,
+    );
+}
+
 pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
     let drawing = Drawing::load_file(filename).unwrap();
 
@@ -17,7 +33,7 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
                 pb.line_to(line.p2.x as f32, line.p2.y as f32);
             }
             EntityType::Arc(ref arc) => {
-                //
+                draw_arc(arc.center.x, arc.center.y, arc.radius, &mut pb);
             }
             EntityType::Ellipse(ref arc) => {
                 //

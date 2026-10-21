@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use tiny_skia::{Color, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, LineJoin, Paint, Path, Pixmap, Stroke, Transform};
 
 static COLOR_MAIN: LazyLock<Paint> = LazyLock::new(|| paint_from_color(0, 100, 255));
 
