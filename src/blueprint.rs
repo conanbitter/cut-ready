@@ -101,7 +101,17 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
                 pb.push_path(&path.transform(transform).unwrap());
             }
             EntityType::LwPolyline(ref polyline) => {
-                //
+                if !polyline.vertices.is_empty() {
+                    let mut line = PathBuilder::new();
+                    line.move_to(polyline.vertices[0].x as f32, -polyline.vertices[0].y as f32);
+                    for point in &polyline.vertices {
+                        line.line_to(point.x as f32, -point.y as f32);
+                    }
+                    if polyline.flags > 0 {
+                        line.close();
+                    }
+                    pb.push_path(&line.finish().unwrap());
+                }
             }
             EntityType::Spline(ref spline) => {
                 //
