@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use tiny_skia::{Color, LineJoin, Paint, Path, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, LineCap, LineJoin, Paint, Path, Pixmap, Stroke, Transform};
 
 static COLOR_MAIN: LazyLock<Paint> = LazyLock::new(|| paint_from_color(0, 100, 255));
 
@@ -27,6 +27,7 @@ impl Inker {
         let stroke = Stroke {
             width: 5.0,
             line_join: LineJoin::Round,
+            line_cap: LineCap::Round,
             ..Stroke::default()
         };
 
@@ -47,7 +48,7 @@ impl Inker {
     pub fn draw(&mut self) -> &[u8] {
         let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
 
-        self.stroke.width = 5.0 / self.scale;
+        self.stroke.width = 2.0 / self.scale;
 
         self.pixmap.fill(Color::WHITE);
         self.pixmap

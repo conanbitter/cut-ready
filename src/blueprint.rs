@@ -1,21 +1,54 @@
 use dxf::{Drawing, entities::EntityType};
-use std::path::Path;
-use tiny_skia::PathBuilder;
+use std::{f64::consts::TAU, path::Path};
+use tiny_skia::{PathBuilder, Transform};
 
-const KAPPA: f64 = 0.5522847498307934;
+const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
+const EPSILON: f64 = 0.0001;
 
-fn draw_arc(cx: f64, cy: f64, r: f64, pb: &mut PathBuilder) {
-    let kr = KAPPA * r;
+fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_skia::Path {
+    let (sweep_angle, start_angle) = if start_angle <= end_angle {
+        ((end_angle - start_angle).to_radians(), start_angle.to_radians())
+    } else {
+        ((start_angle - end_angle).to_radians(), end_angle.to_radians())
+    };
 
-    pb.move_to((cx + r) as f32, cy as f32);
-    pb.cubic_to(
-        (cx + r) as f32,
-        (cy + kr) as f32,
-        (cx + kr) as f32,
-        (cy + r) as f32,
-        cx as f32,
-        (cy + r) as f32,
-    );
+    let mut pb = PathBuilder::new();
+
+    let segments_count = (sweep_angle / MAX_SEGMENT_ANGLE).ceil() as usize;
+    let segment_sweep = sweep_angle / segments_count as f32;
+
+    let lr = (4.0 / 3.0) * (segment_sweep / 4.0).tan() * r;
+
+    let mut cur_angle = start_angle;
+    let start_x = cx + r * cur_angle.cos();
+    let start_y = cy + r * cur_angle.sin();
+    pb.move_to(start_x, start_y);
+
+    for _ in 0..segments_count {
+        let next_angle = cur_angle + segment_sweep;
+
+        let (sin_curr, cos_curr) = cur_angle.sin_cos();
+        let (sin_next, cos_next) = next_angle.sin_cos();
+
+        let x0 = cx + r * cos_curr;
+        let y0 = cy + r * sin_curr;
+
+        let x = cx + r * cos_next;
+        let y = cy + r * sin_next;
+
+        let x1 = x0 - lr * sin_curr;
+        let y1 = y0 + lr * cos_curr;
+
+        let x2 = x + lr * sin_next;
+        let y2 = y - lr * cos_next;
+
+        pb.cubic_to(x1, y1, x2, y2, x, y);
+        //pb.line_to(x, y);
+
+        cur_angle = next_angle;
+    }
+
+    pb.finish().unwrap()
 }
 
 pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
@@ -33,10 +66,39 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
                 pb.line_to(line.p2.x as f32, line.p2.y as f32);
             }
             EntityType::Arc(ref arc) => {
-                draw_arc(arc.center.x, arc.center.y, arc.radius, &mut pb);
+                pb.push_path(&arc_path(
+                    arc.center.x as f32,
+                    arc.center.y as f32,
+                    arc.radius as f32,
+                    arc.start_angle as f32,
+                    arc.end_angle as f32,
+                ));
             }
-            EntityType::Ellipse(ref arc) => {
-                //
+            EntityType::Ellipse(ref ellipse) => {
+                let radius = (ellipse.major_axis.x * ellipse.major_axis.x + ellipse.major_axis.y * ellipse.major_axis.y)
+                    .sqrt() as f32;
+                let angle = {
+                    let res = (ellipse.major_axis.x as f32 / radius).acos();
+                    if ellipse.major_axis.y > 0.0 { res } else { -res }
+                };
+
+                let path = if ellipse.start_parameter.abs() < EPSILON && (ellipse.end_parameter - TAU).abs() < EPSILON {
+                    PathBuilder::from_circle(0.0, 0.0, radius).unwrap()
+                } else {
+                    arc_path(
+                        0.0,
+                        0.0,
+                        radius,
+                        ellipse.start_parameter.to_degrees() as f32,
+                        ellipse.end_parameter.to_degrees() as f32,
+                    )
+                };
+
+                let transform = Transform::from_scale(1.0, ellipse.minor_axis_ratio as f32)
+                    .post_rotate(angle.to_degrees())
+                    .post_translate(ellipse.center.x as f32, ellipse.center.y as f32);
+
+                pb.push_path(&path.transform(transform).unwrap());
             }
             EntityType::LwPolyline(ref polyline) => {
                 //
