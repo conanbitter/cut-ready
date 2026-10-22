@@ -1,5 +1,3 @@
-use std::process::Output;
-
 use dxf::entities::Spline;
 use enterpolation::{Curve, Signal, bspline::BSpline};
 use tiny_skia::PathBuilder;
@@ -79,7 +77,7 @@ impl std::fmt::Debug for Point2D {
 }
 
 const MAX_DEPTH: usize = 100;
-const LINEAR_TOLERANCE: f32 = 100.0;
+const LINEAR_TOLERANCE: f32 = 0.01;
 const LINEAR_TOLERANCE2: f32 = LINEAR_TOLERANCE * LINEAR_TOLERANCE;
 
 fn process_segment<C>(curve: &C, start: f32, end: f32, depth: usize, points: &mut Vec<f32>)
@@ -135,12 +133,23 @@ where
     C: Signal<f32, Output = Point2D> + Curve<f32>,
 {
     let [start, end] = curve.domain();
-    let mut points = vec![end];
+
+    let mut segments = vec![start, end];
+    segments.extend(knots);
+    dedup_and_sort(&mut segments);
+
+    let mut points = vec![];
+
+    for s in segments.windows(2) {
+        points.push(s[1]);
+        process_segment(curve, s[0], s[1], 0, &mut points);
+    }
+
+    //points.push(end);
     //process_segment(curve, start, end, 0, &mut points);
-    points.extend(knots);
-    dedup_and_sort(&mut points);
-    println!("{:?}", points);
     points.sort_by(|a, b| a.total_cmp(b));
+    //println!("{:?}", points);
+    //println!("Segments {}", points.len() - 1);
 
     let start_point = curve.eval(start);
     builder.move_to(start_point.x, start_point.y);
@@ -171,13 +180,13 @@ pub fn curve_path(dxf_spline: &Spline) -> anyhow::Result<tiny_skia::Path> {
             .dynamic()
             .build()?;
         linear_segmentation(&curve, &mut pb, &knots);
-        for (i, p) in curve.take(100).enumerate() {
+        /*for (i, p) in curve.take(100).enumerate() {
             if i == 0 {
                 pb.move_to(p.x, p.y);
             } else {
                 pb.line_to(p.x, p.y);
             }
-        }
+        }*/
     } else {
         // B-Slines
         let control_points: Vec<Point2D> = dxf_spline
@@ -193,13 +202,13 @@ pub fn curve_path(dxf_spline: &Spline) -> anyhow::Result<tiny_skia::Path> {
             .dynamic()
             .build()?;
         linear_segmentation(&curve, &mut pb, &knots);
-        for (i, p) in curve.take(100).enumerate() {
+        /*for (i, p) in curve.take(100).enumerate() {
             if i == 0 {
                 pb.move_to(p.x, p.y);
             } else {
                 pb.line_to(p.x, p.y);
             }
-        }
+        }*/
     }
     Ok(pb.finish().unwrap())
 }
