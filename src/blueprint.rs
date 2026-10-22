@@ -1,5 +1,8 @@
-use dxf::{Drawing, entities::EntityType};
-use std::{f64::consts::TAU, path::Path};
+use dxf::{
+    Drawing,
+    entities::{Entity, EntityType},
+};
+use std::{collections::HashMap, f64::consts::TAU, path::Path};
 use tiny_skia::{PathBuilder, Transform};
 
 use crate::curves::curve_path;
@@ -53,12 +56,13 @@ fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_
     pb.finish().unwrap()
 }
 
-pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
-    let drawing = Drawing::load_file(filename).unwrap();
-
+fn process_entities<'a, L>(list: L, blocks: &HashMap<String, tiny_skia::Path>) -> anyhow::Result<tiny_skia::Path>
+where
+    L: Iterator<Item = &'a Entity>,
+{
     let mut pb = PathBuilder::new();
 
-    for e in drawing.entities() {
+    for e in list {
         match e.specific {
             EntityType::Circle(ref circle) => {
                 pb.push_circle(circle.center.x as f32, -circle.center.y as f32, circle.radius as f32);
@@ -132,6 +136,20 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
                 );*/
                 pb.push_path(&curve_path(spline).unwrap());
             }
+            EntityType::Insert(ref insert) => {
+                if let Some(path) = blocks.get(&insert.name) {
+                    for col in 0..insert.column_count {
+                        for row in 0..insert.row_count {
+                            let x = (insert.location.x + col as f64 * insert.column_spacing) as f32;
+                            let y = (insert.location.y + row as f64 * insert.row_spacing) as f32;
+                            let transform =
+                                Transform::from_scale(insert.x_scale_factor as f32, insert.y_scale_factor as f32)
+                                    .post_translate(x, y);
+                            pb.push_path(&path.clone().transform(transform).unwrap());
+                        }
+                    }
+                }
+            }
             _ => {
                 //println!("======\n{:?}", e.specific);
             }
@@ -139,12 +157,24 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
     }
 
     if pb.is_empty() {
-        pb.push_circle(100.0, 100.0, 50.0);
-        pb.move_to(128.0, 32.0);
-        pb.line_to(224.0, 224.0);
-        pb.line_to(32.0, 224.0);
-        pb.close();
+        pb.push_circle(0.0, 0.0, 10.0);
     }
 
     Ok(pb.finish().unwrap())
+}
+
+pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
+    let drawing = Drawing::load_file(filename).unwrap();
+
+    let mut blocks = HashMap::new();
+
+    for block in drawing.blocks() {
+        println!("Block {} - {}", block.name, block.entities.len());
+        if !block.entities.is_empty() {
+            let path = process_entities(block.entities.iter(), &blocks)?;
+            blocks.insert(block.name.clone(), path);
+        }
+    }
+
+    process_entities(drawing.entities(), &blocks)
 }
