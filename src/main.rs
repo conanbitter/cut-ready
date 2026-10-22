@@ -64,7 +64,7 @@ impl ApplicationHandler for App {
                 surface.resize(width, height).unwrap();
             }
 
-            let inker = Inker::new(load_dxf("tests/bugs/bulge.dxf").unwrap());
+            let inker = Inker::new(load_dxf("tests/test.dxf").unwrap());
 
             self.state = Some(AppState {
                 window: window_rc,

@@ -48,7 +48,7 @@ fn arc_draw(cx: f32, cy: f32, r: f32, start_angle: f32, sweep_angle: f32, moveto
 }
 
 fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_skia::Path {
-    let sweep_angle = if start_angle <= end_angle {
+    /*let sweep_angle = if start_angle <= end_angle {
         end_angle - start_angle
     } else {
         end_angle + std::f32::consts::TAU - start_angle
@@ -90,6 +90,14 @@ fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_
         cur_angle = next_angle;
     }
 
+    pb.finish().unwrap()*/
+    let mut pb = PathBuilder::new();
+    let sweep_angle = if start_angle <= end_angle {
+        end_angle - start_angle
+    } else {
+        end_angle + std::f32::consts::TAU - start_angle
+    };
+    arc_draw(cx, cy, r, start_angle, sweep_angle, true, &mut pb);
     pb.finish().unwrap()
 }
 
