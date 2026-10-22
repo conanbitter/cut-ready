@@ -10,6 +10,43 @@ use crate::curves::curve_path;
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
 const EPSILON: f64 = 0.0001;
 
+fn arc_draw(cx: f32, cy: f32, r: f32, start_angle: f32, sweep_angle: f32, moveto: bool, builder: &mut PathBuilder) {
+    let segments_count = (sweep_angle.abs() / MAX_SEGMENT_ANGLE).ceil() as usize;
+    let segment_sweep = sweep_angle / segments_count as f32;
+
+    let lr = (4.0 / 3.0) * (segment_sweep / 4.0).tan() * r;
+
+    let mut cur_angle = start_angle;
+    if moveto {
+        let start_x = cx + r * cur_angle.cos();
+        let start_y = cy + r * cur_angle.sin();
+        builder.move_to(start_x, -start_y);
+    }
+
+    for _ in 0..segments_count {
+        let next_angle = cur_angle + segment_sweep;
+
+        let (sin_curr, cos_curr) = cur_angle.sin_cos();
+        let (sin_next, cos_next) = next_angle.sin_cos();
+
+        let x0 = cx + r * cos_curr;
+        let y0 = cy + r * sin_curr;
+
+        let x = cx + r * cos_next;
+        let y = cy + r * sin_next;
+
+        let x1 = x0 - lr * sin_curr;
+        let y1 = y0 + lr * cos_curr;
+
+        let x2 = x + lr * sin_next;
+        let y2 = y - lr * cos_next;
+
+        builder.cubic_to(x1, -y1, x2, -y2, x, -y);
+
+        cur_angle = next_angle;
+    }
+}
+
 fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_skia::Path {
     let sweep_angle = if start_angle <= end_angle {
         end_angle - start_angle
@@ -54,6 +91,21 @@ fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> tiny_
     }
 
     pb.finish().unwrap()
+}
+
+fn bulge_draw(x1: f32, y1: f32, x2: f32, y2: f32, bulge: f32, builder: &mut PathBuilder) {
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let len = dx.hypot(dy);
+
+    let cx = (x1 + x2) * 0.5 - dy * (1.0 - bulge * bulge) / (4.0 * bulge);
+    let cy = (y1 + y2) * 0.5 + dx * (1.0 - bulge * bulge) / (4.0 * bulge);
+    let radius = len * (1.0 + bulge * bulge) / (4.0 * bulge.abs());
+
+    let sweep_angle = 4.0 * bulge.atan();
+    let start_angle = f32::atan2(y1 - cy, x1 - cx);
+
+    arc_draw(cx, cy, radius, start_angle, sweep_angle, false, builder);
 }
 
 fn process_entities<'a, L>(list: L, blocks: &HashMap<String, tiny_skia::Path>) -> anyhow::Result<tiny_skia::Path>
@@ -110,8 +162,21 @@ where
                 if !polyline.vertices.is_empty() {
                     let mut line = PathBuilder::new();
                     line.move_to(polyline.vertices[0].x as f32, -polyline.vertices[0].y as f32);
-                    for point in &polyline.vertices {
-                        line.line_to(point.x as f32, -point.y as f32);
+                    for point in polyline.vertices.windows(2) {
+                        let p1 = point[0];
+                        let p2 = point[1];
+                        if p1.bulge.abs() > EPSILON {
+                            bulge_draw(
+                                p1.x as f32,
+                                p1.y as f32,
+                                p2.x as f32,
+                                p2.y as f32,
+                                p1.bulge as f32,
+                                &mut line,
+                            );
+                        } else {
+                            line.line_to(p2.x as f32, -p2.y as f32);
+                        }
                     }
                     if polyline.flags > 0 {
                         line.close();
