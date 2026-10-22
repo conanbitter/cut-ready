@@ -337,6 +337,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dxf",
+ "enterpolation",
  "softbuffer",
  "tiny-skia 0.12.0",
  "winit",
@@ -460,6 +461,17 @@ dependencies = [
  "rustversion",
  "scopeguard",
  "simdutf8",
+]
+
+[[package]]
+name = "enterpolation"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a22807a89be4e84d1bb3bd023149103da0e3d16f8e322fb1990a61285a484a10"
+dependencies = [
+ "num-traits 0.2.19",
+ "serde",
+ "topology-traits",
 ]
 
 [[package]]
@@ -1526,6 +1538,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1823,6 +1836,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
  "winnow",
+]
+
+[[package]]
+name = "topology-traits"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0c8dab428531e30115d3bfd6e3092b55256a4a7b4f87cb3abe37a000b1f4032"
+dependencies = [
+ "num-traits 0.2.19",
 ]
 
 [[package]]

@@ -2,6 +2,8 @@ use dxf::{Drawing, entities::EntityType};
 use std::{f64::consts::TAU, path::Path};
 use tiny_skia::{PathBuilder, Transform};
 
+use crate::curves::curve_path;
+
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
 const EPSILON: f64 = 0.0001;
 
@@ -114,10 +116,24 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
                 }
             }
             EntityType::Spline(ref spline) => {
-                //
+                /*println!(
+                    "{} {} degree:{:3}/{:3}  cps:{:3} fits:{:3} knots:{:3} weights:{:3} valid: {}<={}<={}",
+                    if spline.flags & 4 > 0 { "NURBS   " } else { "B-Spline" },
+                    if spline.flags & 1 > 0 { "closed" } else { "open  " },
+                    spline.degree_of_curve,
+                    spline.knot_values.len() - spline.control_points.len() - 1,
+                    spline.control_points.len(),
+                    spline.fit_points.len(),
+                    spline.knot_values.len(),
+                    spline.weight_values.len(),
+                    spline.control_points.len(),
+                    spline.knot_values.len(),
+                    2 * (spline.control_points.len() - 1),
+                );*/
+                pb.push_path(&curve_path(spline).unwrap());
             }
             _ => {
-                println!("======\n{:?}", e.specific);
+                //println!("======\n{:?}", e.specific);
             }
         }
     }
