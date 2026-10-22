@@ -6,7 +6,10 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 dxf = "0.6.2"
-enterpolation = "0.3.0"
+enterpolation = { version = "0.3.0", default-features = false, features = [
+    "std",
+    "bspline",
+] }
 softbuffer = "0.4.8"
 tiny-skia = "0.12.0"
 winit = "0.30.13"
