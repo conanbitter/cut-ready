@@ -169,7 +169,7 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
     let mut blocks = HashMap::new();
 
     for block in drawing.blocks() {
-        println!("Block {} - {}", block.name, block.entities.len());
+        //println!("Block {} - {}", block.name, block.entities.len());
         if !block.entities.is_empty() {
             let path = process_entities(block.entities.iter(), &blocks)?;
             blocks.insert(block.name.clone(), path);
