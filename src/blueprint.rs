@@ -183,14 +183,12 @@ where
             if e.common.color_24_bit > 0 {
                 drawing_layers.request_path(e.common.color_24_bit)
             } else if e.common.color.is_by_block() {
-                println!("By block");
                 if inside_block {
                     &mut by_block
                 } else {
                     anyhow::bail!("BYBLOCK color outside of block")
                 }
             } else if e.common.color.is_by_layer() {
-                println!("By layer");
                 if inside_block {
                     &mut by_layer
                 } else if let Some(lcolor) = layer_colors.get(&e.common.layer) {
@@ -199,7 +197,6 @@ where
                     drawing_layers.request_path(0x000000)
                 }
             } else if let Some(index) = e.common.color.index() {
-                //println!("index {}", index);
                 drawing_layers.request_path(DEFAULT_COLORS[index as usize])
             } else {
                 drawing_layers.request_path(0x000000)
@@ -398,7 +395,6 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         .layers()
         .map(|l| (l.name.clone(), DEFAULT_COLORS[l.color.index().unwrap() as usize]))
         .collect();
-    println!("{:?}", layer_colors);
 
     let mut blocks = HashMap::new();
 
@@ -425,7 +421,6 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
             drawing: path.path,
             color: paint,
         });
-        println!("RGB({}, {}, {})", r, g, b);
     }
     Ok(result)
 }

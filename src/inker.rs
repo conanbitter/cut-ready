@@ -1,17 +1,6 @@
-use std::sync::LazyLock;
-
-use tiny_skia::{Color, LineCap, LineJoin, Paint, Path, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, LineCap, LineJoin, Pixmap, Stroke, Transform};
 
 use crate::blueprint::Blueprint;
-
-static COLOR_MAIN: LazyLock<Paint> = LazyLock::new(|| paint_from_color(0, 100, 255));
-
-fn paint_from_color(r: u8, g: u8, b: u8) -> Paint<'static> {
-    let mut paint = Paint::default();
-    paint.set_color_rgba8(r, g, b, 255);
-    paint.anti_alias = true;
-    paint
-}
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
@@ -50,16 +39,14 @@ impl<'a> Inker<'a> {
     pub fn draw(&mut self) -> &[u8] {
         let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
 
-        self.stroke.width = 2.0 / self.scale;
+        self.stroke.width = 0.95 / self.scale;
 
         self.pixmap.fill(Color::WHITE);
         for layer in &self.current_blueprint.layers {
             self.pixmap
                 .stroke_path(&layer.drawing, &layer.color, &self.stroke, transform, None);
         }
-        //self.pixmap
-        //    .stroke_path(&self.path, &COLOR_MAIN, &self.stroke, transform, None);
-        //self.pixmap.save_png("test.png").unwrap();
+
         self.pixmap.data()
     }
 

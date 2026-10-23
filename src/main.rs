@@ -85,7 +85,6 @@ impl<'a> ApplicationHandler for App<'a> {
 
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
@@ -107,7 +106,6 @@ impl<'a> ApplicationHandler for App<'a> {
                     let dx = position.x - app_state.old_x;
                     let dy = position.y - app_state.old_y;
                     app_state.inker.pan(dx as f32, dy as f32);
-                    //println!("X:{} Y:{}", dx, dy);
                     app_state.old_x = position.x;
                     app_state.old_y = position.y;
                     app_state.window.request_redraw();
@@ -115,7 +113,6 @@ impl<'a> ApplicationHandler for App<'a> {
                     app_state.old_x = position.x;
                     app_state.old_y = position.y;
                 }
-                //println!("X:{} Y:{}", position.x, position.y)
             }
             WindowEvent::MouseWheel {
                 device_id: _,
