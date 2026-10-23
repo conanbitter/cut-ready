@@ -12,6 +12,7 @@ use crate::{blueprint::load_dxf, inker::Inker};
 
 mod blueprint;
 mod curves;
+mod geometry;
 mod inker;
 
 struct AppState {
