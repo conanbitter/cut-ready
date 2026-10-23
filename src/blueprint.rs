@@ -13,7 +13,7 @@ use crate::{
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
 
 const DEFAULT_COLORS: [i32; 256] = [
-    0x000000, 0xFF0000, 0xFFFF00, 0x00FF00, 0x00FFFF, 0x0000FF, 0xFF00FF, 0xFFFFFF, 0x414141, 0x808080, 0xFF0000,
+    0x000000, 0xFF0000, 0xFFFF00, 0x00FF00, 0x00FFFF, 0x0000FF, 0xFF00FF, 0x000000, 0x414141, 0x808080, 0xFF0000,
     0xFFAAAA, 0xBD0000, 0xBD7E7E, 0x810000, 0x815656, 0x680000, 0x684545, 0x4F0000, 0x4F3535, 0xFF3F00, 0xFFBFAA,
     0xBD2E00, 0xBD8D7E, 0x811F00, 0x816056, 0x681900, 0x684E45, 0x4F1300, 0x4F3B35, 0xFF7F00, 0xFFD4AA, 0xBD5E00,
     0xBD9D7E, 0x814000, 0x816B56, 0x683400, 0x685645, 0x4F2700, 0x4F4235, 0xFFBF00, 0xFFEAAA, 0xBD8D00, 0xBDAD7E,
@@ -39,11 +39,22 @@ const DEFAULT_COLORS: [i32; 256] = [
     0x828282, 0xBEBEBE, 0xFFFFFF,
 ];
 
-struct DrawingLayers(HashMap<i32, tiny_skia::PathBuilder>);
-
-struct DrawingBlock {
-    layers: Vec<(i32, tiny_skia::Path)>,
+#[derive(Default)]
+struct DrawingLayer {
+    builder: tiny_skia::PathBuilder,
     open_ends: Vec<Point2D>,
+}
+
+struct DrawingLayers(HashMap<i32, DrawingLayer>);
+
+struct BlockLayer {
+    path: tiny_skia::Path,
+    open_ends: Vec<Point2D>,
+}
+struct DrawingBlock {
+    layers: Vec<(i32, BlockLayer)>,
+    by_layer: Option<BlockLayer>,
+    by_block: Option<BlockLayer>,
 }
 
 pub struct BlueprintLayer<'a> {
@@ -59,14 +70,22 @@ impl DrawingLayers {
         DrawingLayers(HashMap::new())
     }
 
-    fn request_path(&mut self, color: i32) -> &mut PathBuilder {
+    fn request_path(&mut self, color: i32) -> &mut DrawingLayer {
         self.0.entry(color).or_default();
         self.0.get_mut(&color).unwrap()
     }
 }
 
-fn is_primary_color(color: i32) -> bool {
-    color != 0
+impl DrawingLayer {
+    fn finish(self) -> Option<BlockLayer> {
+        match self.builder.finish() {
+            Some(path) => Some(BlockLayer {
+                path,
+                open_ends: self.open_ends,
+            }),
+            None => None,
+        }
+    }
 }
 
 fn arc_draw(cx: f32, cy: f32, r: f32, start_angle: f32, sweep_angle: f32, moveto: bool, builder: &mut PathBuilder) {
@@ -132,36 +151,63 @@ fn bulge_draw(x1: f32, y1: f32, x2: f32, y2: f32, bulge: f32, builder: &mut Path
     arc_draw(cx, cy, radius, start_angle, sweep_angle, false, builder);
 }
 
-fn process_entities<'a, L>(list: L, blocks: &HashMap<String, DrawingBlock>) -> anyhow::Result<DrawingBlock>
+fn transfer_layer(dst: &mut DrawingLayer, src: &BlockLayer, transform: Transform) -> anyhow::Result<()> {
+    dst.builder.push_path(
+        &src.path
+            .clone()
+            .transform(transform)
+            .ok_or(anyhow::anyhow!("Cannot transform block"))?,
+    );
+
+    dst.open_ends
+        .extend(src.open_ends.iter().map(|p| p.transform(transform)));
+
+    Ok(())
+}
+
+fn process_entities<'a, L>(
+    list: L,
+    blocks: &HashMap<String, DrawingBlock>,
+    layer_colors: &HashMap<String, i32>,
+    inside_block: bool,
+) -> anyhow::Result<DrawingBlock>
 where
     L: Iterator<Item = &'a Entity>,
 {
     let mut drawing_layers = DrawingLayers::new();
-    let mut open_ends = vec![];
+    let mut by_layer = DrawingLayer::default();
+    let mut by_block = DrawingLayer::default();
 
     for e in list {
-        //println!("layer '{}'", e.common.layer);
-        let color = {
+        let dl = {
             if e.common.color_24_bit > 0 {
-                e.common.color_24_bit
+                drawing_layers.request_path(e.common.color_24_bit)
             } else if e.common.color.is_by_block() {
                 println!("By block");
-                0x000000
+                if inside_block {
+                    &mut by_block
+                } else {
+                    anyhow::bail!("BYBLOCK color outside of block")
+                }
             } else if e.common.color.is_by_layer() {
                 println!("By layer");
-                0x000000
+                if inside_block {
+                    &mut by_layer
+                } else if let Some(lcolor) = layer_colors.get(&e.common.layer) {
+                    drawing_layers.request_path(*lcolor)
+                } else {
+                    drawing_layers.request_path(0x000000)
+                }
             } else if let Some(index) = e.common.color.index() {
                 //println!("index {}", index);
-                DEFAULT_COLORS[index as usize]
+                drawing_layers.request_path(DEFAULT_COLORS[index as usize])
             } else {
-                0x000000
+                drawing_layers.request_path(0x000000)
             }
         };
-        //println!("{} {}", color, e.common.color_24_bit);
+        let pb = &mut dl.builder;
+        let open_ends = &mut dl.open_ends;
 
-        let pb = drawing_layers.request_path(color);
-        let primary = is_primary_color(color);
-        //println!("{:?}\n================", e.specific);
         match e.specific {
             EntityType::Circle(ref circle) => {
                 pb.push_circle(circle.center.x as f32, -circle.center.y as f32, circle.radius as f32);
@@ -174,10 +220,9 @@ where
                 let y2 = -line.p2.y as f32;
                 pb.move_to(x1, y1);
                 pb.line_to(x2, y2);
-                if primary {
-                    open_ends.push(Point2D::new(x1, y1));
-                    open_ends.push(Point2D::new(x2, y2));
-                }
+
+                open_ends.push(Point2D::new(x1, y1));
+                open_ends.push(Point2D::new(x2, y2));
             }
 
             EntityType::Arc(ref arc) => {
@@ -187,12 +232,11 @@ where
                 let start_angle = arc.start_angle.to_radians() as f32;
                 let end_angle = arc.end_angle.to_radians() as f32;
                 pb.push_path(&arc_path(cx, cy, r, start_angle, end_angle)?);
-                if primary {
-                    let start_point = Point2D::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
-                    let end_point = Point2D::new(cx + r * end_angle.cos(), cy + r * end_angle.sin());
-                    open_ends.push(start_point);
-                    open_ends.push(end_point);
-                }
+
+                let start_point = Point2D::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
+                let end_point = Point2D::new(cx + r * end_angle.cos(), cy + r * end_angle.sin());
+                open_ends.push(start_point);
+                open_ends.push(end_point);
             }
 
             EntityType::Ellipse(ref ellipse) => {
@@ -222,12 +266,11 @@ where
                         .transform(transform)
                         .ok_or(anyhow::anyhow!("Cant transform an ellipse"))?;
                     pb.push_path(&path);
-                    if primary {
-                        let start_point = Point2D::new(radius * start_angle.cos(), radius * start_angle.sin());
-                        let end_point = Point2D::new(radius * end_angle.cos(), radius * end_angle.sin());
-                        open_ends.push(start_point.transform(transform));
-                        open_ends.push(end_point.transform(transform));
-                    }
+
+                    let start_point = Point2D::new(radius * start_angle.cos(), radius * start_angle.sin());
+                    let end_point = Point2D::new(radius * end_angle.cos(), radius * end_angle.sin());
+                    open_ends.push(start_point.transform(transform));
+                    open_ends.push(end_point.transform(transform));
                 };
             }
 
@@ -271,7 +314,7 @@ where
 
                     pb.push_path(&line.finish().ok_or(anyhow::anyhow!("Path is empty"))?);
 
-                    if primary && polyline.flags & 1 == 0 {
+                    if polyline.flags & 1 == 0 {
                         // Open polyline
                         open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
                         open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
@@ -281,7 +324,7 @@ where
 
             EntityType::Spline(ref spline) => {
                 pb.push_path(&curve_path(spline).unwrap());
-                if primary && spline.flags & 1 == 0 {
+                if spline.flags & 1 == 0 {
                     //Open spline
                     let p1 = spline.control_points.first().unwrap();
                     let p2 = spline.control_points.last().unwrap();
@@ -292,6 +335,19 @@ where
 
             EntityType::Insert(ref insert) => {
                 if let Some(block) = blocks.get(&insert.name) {
+                    if let Some(src) = block.by_block.as_ref() {
+                        for col in 0..insert.column_count {
+                            for row in 0..insert.row_count {
+                                let x = (insert.location.x + col as f64 * insert.column_spacing) as f32;
+                                let y = (insert.location.y + row as f64 * insert.row_spacing) as f32;
+                                let transform =
+                                    Transform::from_scale(insert.x_scale_factor as f32, insert.y_scale_factor as f32)
+                                        .post_translate(x, y);
+                                transfer_layer(dl, src, transform)?;
+                            }
+                        }
+                    }
+
                     for col in 0..insert.column_count {
                         for row in 0..insert.row_count {
                             let x = (insert.location.x + col as f64 * insert.column_spacing) as f32;
@@ -300,26 +356,25 @@ where
                                 Transform::from_scale(insert.x_scale_factor as f32, insert.y_scale_factor as f32)
                                     .post_translate(x, y);
 
-                            for (color, path) in &block.layers {
-                                drawing_layers.request_path(*color).push_path(
-                                    &path
-                                        .clone()
-                                        .transform(transform)
-                                        .ok_or(anyhow::anyhow!("Cannot transform block"))?,
-                                );
+                            for (color, block_layer) in &block.layers {
+                                let drawing_layer = drawing_layers.request_path(*color);
+                                transfer_layer(drawing_layer, block_layer, transform)?;
                             }
 
-                            for point in &block.open_ends {
-                                open_ends.push(point.transform(transform));
+                            if let Some(src) = block.by_layer.as_ref() {
+                                let by_layer_drawing = if let Some(lcolor) = layer_colors.get(&e.common.layer) {
+                                    drawing_layers.request_path(*lcolor)
+                                } else {
+                                    drawing_layers.request_path(0x000000)
+                                };
+                                transfer_layer(by_layer_drawing, src, transform)?;
                             }
                         }
                     }
                 }
             }
 
-            _ => {
-                println!("{:?}", e.specific)
-            }
+            _ => (),
         }
     }
 
@@ -329,25 +384,34 @@ where
             layers.push((color, path));
         }
     }
-    Ok(DrawingBlock { layers, open_ends })
+    Ok(DrawingBlock {
+        layers,
+        by_layer: by_layer.finish(),
+        by_block: by_block.finish(),
+    })
 }
 
 pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
     let drawing = Drawing::load_file(filename).unwrap();
 
-    for dxf_layer in drawing.layers() {
-        println!("{:?}", dxf_layer);
-    }
+    let layer_colors: HashMap<String, i32> = drawing
+        .layers()
+        .map(|l| (l.name.clone(), DEFAULT_COLORS[l.color.index().unwrap() as usize]))
+        .collect();
+    println!("{:?}", layer_colors);
 
     let mut blocks = HashMap::new();
 
     for block in drawing.blocks() {
         if !block.entities.is_empty() {
-            blocks.insert(block.name.clone(), process_entities(block.entities.iter(), &blocks)?);
+            blocks.insert(
+                block.name.clone(),
+                process_entities(block.entities.iter(), &blocks, &layer_colors, true)?,
+            );
         }
     }
 
-    let main_block = process_entities(drawing.entities(), &blocks)?;
+    let main_block = process_entities(drawing.entities(), &blocks, &layer_colors, false)?;
 
     let mut result = Blueprint { layers: vec![] };
     for (color, path) in main_block.layers {
@@ -358,7 +422,7 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         paint.set_color_rgba8(r, g, b, 255);
         paint.anti_alias = true;
         result.layers.push(BlueprintLayer {
-            drawing: path,
+            drawing: path.path,
             color: paint,
         });
         println!("RGB({}, {}, {})", r, g, b);
