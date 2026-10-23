@@ -1,17 +1,17 @@
-pub const EPSILON: f64 = 0.0001;
+pub const EPSILON: f32 = 0.0001;
 
 #[derive(Clone, Copy, Default)]
 pub struct Point2D {
-    pub x: f64,
-    pub y: f64,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Point2D {
-    pub fn new(x: f64, y: f64) -> Point2D {
+    pub fn new(x: f32, y: f32) -> Point2D {
         Point2D { x, y }
     }
 
-    pub fn dist2(self, other: Point2D) -> f64 {
+    pub fn dist2(self, other: Point2D) -> f32 {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         dx * dx + dy * dy
@@ -40,10 +40,10 @@ impl std::ops::Sub for Point2D {
     }
 }
 
-impl std::ops::Mul<f64> for Point2D {
+impl std::ops::Mul<f32> for Point2D {
     type Output = Point2D;
 
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: f32) -> Self::Output {
         Point2D {
             x: self.x * rhs,
             y: self.y * rhs,
@@ -51,10 +51,10 @@ impl std::ops::Mul<f64> for Point2D {
     }
 }
 
-impl std::ops::Div<f64> for Point2D {
+impl std::ops::Div<f32> for Point2D {
     type Output = Point2D;
 
-    fn div(self, rhs: f64) -> Self::Output {
+    fn div(self, rhs: f32) -> Self::Output {
         Point2D {
             x: self.x / rhs,
             y: self.y / rhs,
