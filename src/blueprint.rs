@@ -10,12 +10,9 @@ use crate::{curves::curve_path, geometry::Point2D};
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
 const EPSILON: f64 = 0.0001;
 
-struct DrawingBlock {
-    layers: HashMap<i32, tiny_skia::PathBuilder>,
-    open_ends: Vec<Point2D>,
-}
+struct DrawingLayers(HashMap<i32, tiny_skia::PathBuilder>);
 
-struct FinishedBlock {
+struct DrawingBlock {
     layers: Vec<(i32, tiny_skia::Path)>,
     open_ends: Vec<Point2D>,
 }
@@ -28,28 +25,14 @@ struct Blueprint<'a> {
     layers: Vec<BlueprintLayer<'a>>,
 }
 
-impl DrawingBlock {
-    fn new() -> DrawingBlock {
-        DrawingBlock {
-            layers: HashMap::new(),
-            open_ends: vec![],
-        }
+impl DrawingLayers {
+    fn new() -> DrawingLayers {
+        DrawingLayers(HashMap::new())
     }
 
     fn request_path(&mut self, color: i32) -> &mut PathBuilder {
-        self.layers.entry(color).or_default();
-        self.layers.get_mut(&color).unwrap()
-    }
-
-    fn finish(self) -> anyhow::Result<FinishedBlock> {
-        let mut layers = vec![];
-        for (color, builder) in self.layers {
-            layers.push((color, builder.finish().ok_or(anyhow::anyhow!("Path is empty"))?));
-        }
-        Ok(FinishedBlock {
-            layers,
-            open_ends: self.open_ends,
-        })
+        self.0.entry(color).or_default();
+        self.0.get_mut(&color).unwrap()
     }
 }
 
@@ -120,14 +103,15 @@ fn bulge_draw(x1: f32, y1: f32, x2: f32, y2: f32, bulge: f32, builder: &mut Path
     arc_draw(cx, cy, radius, start_angle, sweep_angle, false, builder);
 }
 
-fn process_entities<'a, L>(list: L, blocks: &HashMap<String, FinishedBlock>) -> anyhow::Result<DrawingBlock>
+fn process_entities<'a, L>(list: L, blocks: &HashMap<String, DrawingBlock>) -> anyhow::Result<DrawingBlock>
 where
     L: Iterator<Item = &'a Entity>,
 {
-    let mut drawing = DrawingBlock::new();
+    let mut drawing_layers = DrawingLayers::new();
+    let mut open_ends = vec![];
 
     for e in list {
-        let pb = drawing.request_path(e.common.color_24_bit);
+        let pb = drawing_layers.request_path(e.common.color_24_bit);
         let primary = is_primary_color(e.common.color_24_bit);
         match e.specific {
             EntityType::Circle(ref circle) => {
@@ -142,8 +126,8 @@ where
                 pb.move_to(x1, y1);
                 pb.line_to(x2, y2);
                 if primary {
-                    drawing.open_ends.push(Point2D::new(x1, y1));
-                    drawing.open_ends.push(Point2D::new(x2, y2));
+                    open_ends.push(Point2D::new(x1, y1));
+                    open_ends.push(Point2D::new(x2, y2));
                 }
             }
 
@@ -157,8 +141,8 @@ where
                 if primary {
                     let start_point = Point2D::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
                     let end_point = Point2D::new(cx + r * end_angle.cos(), cy + r * end_angle.sin());
-                    drawing.open_ends.push(start_point);
-                    drawing.open_ends.push(end_point);
+                    open_ends.push(start_point);
+                    open_ends.push(end_point);
                 }
             }
 
@@ -192,8 +176,8 @@ where
                     if primary {
                         let start_point = Point2D::new(radius * start_angle.cos(), radius * start_angle.sin());
                         let end_point = Point2D::new(radius * end_angle.cos(), radius * end_angle.sin());
-                        drawing.open_ends.push(start_point.transform(transform));
-                        drawing.open_ends.push(end_point.transform(transform));
+                        open_ends.push(start_point.transform(transform));
+                        open_ends.push(end_point.transform(transform));
                     }
                 };
             }
@@ -240,8 +224,8 @@ where
 
                     if primary && polyline.flags & 1 == 0 {
                         // Open polyline
-                        drawing.open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
-                        drawing.open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
+                        open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
+                        open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
                     }
                 }
             }
@@ -252,8 +236,8 @@ where
                     //Open spline
                     let p1 = spline.control_points.first().unwrap();
                     let p2 = spline.control_points.last().unwrap();
-                    drawing.open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
-                    drawing.open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
+                    open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
+                    open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
                 }
             }
 
@@ -268,7 +252,7 @@ where
                                     .post_translate(x, y);
 
                             for (color, path) in &block.layers {
-                                drawing.request_path(*color).push_path(
+                                drawing_layers.request_path(*color).push_path(
                                     &path
                                         .clone()
                                         .transform(transform)
@@ -277,7 +261,7 @@ where
                             }
 
                             for point in &block.open_ends {
-                                drawing.open_ends.push(point.transform(transform));
+                                open_ends.push(point.transform(transform));
                             }
                         }
                     }
@@ -287,7 +271,11 @@ where
         }
     }
 
-    Ok(drawing)
+    let mut layers = vec![];
+    for (color, builder) in drawing_layers.0 {
+        layers.push((color, builder.finish().ok_or(anyhow::anyhow!("Path is empty"))?));
+    }
+    Ok(DrawingBlock { layers, open_ends })
 }
 
 pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
@@ -297,18 +285,15 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
 
     for block in drawing.blocks() {
         if !block.entities.is_empty() {
-            blocks.insert(
-                block.name.clone(),
-                process_entities(block.entities.iter(), &blocks)?.finish()?,
-            );
+            blocks.insert(block.name.clone(), process_entities(block.entities.iter(), &blocks)?);
         }
     }
 
     let main_block = process_entities(drawing.entities(), &blocks)?;
 
     let mut pb = PathBuilder::new();
-    for drawing in main_block.layers.values() {
-        pb.push_path(&drawing.clone().finish().unwrap());
+    for (color, path) in main_block.layers {
+        pb.push_path(&path);
     }
     pb.finish().ok_or(anyhow::anyhow!("Path is empty"))
 }
