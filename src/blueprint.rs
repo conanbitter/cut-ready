@@ -5,10 +5,39 @@ use dxf::{
 use std::{collections::HashMap, f64::consts::TAU, path::Path};
 use tiny_skia::{PathBuilder, Transform};
 
-use crate::{curves::curve_path, geometry::Point2D};
+use crate::{
+    curves::curve_path,
+    geometry::{EPSILON64, Point2D},
+};
 
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
-const EPSILON: f64 = 0.0001;
+
+const DEFAULT_COLORS: [i32; 256] = [
+    0x000000, 0xFF0000, 0xFFFF00, 0x00FF00, 0x00FFFF, 0x0000FF, 0xFF00FF, 0xFFFFFF, 0x414141, 0x808080, 0xFF0000,
+    0xFFAAAA, 0xBD0000, 0xBD7E7E, 0x810000, 0x815656, 0x680000, 0x684545, 0x4F0000, 0x4F3535, 0xFF3F00, 0xFFBFAA,
+    0xBD2E00, 0xBD8D7E, 0x811F00, 0x816056, 0x681900, 0x684E45, 0x4F1300, 0x4F3B35, 0xFF7F00, 0xFFD4AA, 0xBD5E00,
+    0xBD9D7E, 0x814000, 0x816B56, 0x683400, 0x685645, 0x4F2700, 0x4F4235, 0xFFBF00, 0xFFEAAA, 0xBD8D00, 0xBDAD7E,
+    0x816000, 0x817656, 0x684E00, 0x685F45, 0x4F3B00, 0x4F4935, 0xFFFF00, 0xFFFFAA, 0xBDBD00, 0xBDBD7E, 0x818100,
+    0x818156, 0x686800, 0x686845, 0x4F4F00, 0x4F4F35, 0xBFFF00, 0xEAFFAA, 0x8DBD00, 0xADBD7E, 0x608100, 0x768156,
+    0x4E6800, 0x5F6845, 0x3B4F00, 0x494F35, 0x7FFF00, 0xD4FFAA, 0x5EBD00, 0x9DBD7E, 0x408100, 0x6B8156, 0x346800,
+    0x566845, 0x274F00, 0x424F35, 0x3FFF00, 0xBFFFAA, 0x2EBD00, 0x8DBD7E, 0x1F8100, 0x608156, 0x196800, 0x4E6845,
+    0x134F00, 0x3B4F35, 0x00FF00, 0xAAFFAA, 0x00BD00, 0x7EBD7E, 0x008100, 0x568156, 0x006800, 0x456845, 0x004F00,
+    0x354F35, 0x00FF3F, 0xAAFFBF, 0x00BD2E, 0x7EBD8D, 0x00811F, 0x568160, 0x006819, 0x45684E, 0x004F13, 0x354F3B,
+    0x00FF7F, 0xAAFFD4, 0x00BD5E, 0x7EBD9D, 0x008140, 0x56816B, 0x006834, 0x456856, 0x004F27, 0x354F42, 0x00FFBF,
+    0xAAFFEA, 0x00BD8D, 0x7EBDAD, 0x008160, 0x568176, 0x00684E, 0x45685F, 0x004F3B, 0x354F49, 0x00FFFF, 0xAAFFFF,
+    0x00BDBD, 0x7EBDBD, 0x008181, 0x568181, 0x006868, 0x456868, 0x004F4F, 0x354F4F, 0x00BFFF, 0xAAEAFF, 0x008DBD,
+    0x7EADBD, 0x006081, 0x567681, 0x004E68, 0x455F68, 0x003B4F, 0x35494F, 0x007FFF, 0xAAD4FF, 0x005EBD, 0x7E9DBD,
+    0x004081, 0x566B81, 0x003468, 0x455668, 0x00274F, 0x35424F, 0x003FFF, 0xAABFFF, 0x002EBD, 0x7E8DBD, 0x001F81,
+    0x566081, 0x001968, 0x454E68, 0x00134F, 0x353B4F, 0x0000FF, 0xAAAAFF, 0x0000BD, 0x7E7EBD, 0x000081, 0x565681,
+    0x000068, 0x454568, 0x00004F, 0x35354F, 0x3F00FF, 0xBFAAFF, 0x2E00BD, 0x8D7EBD, 0x1F0081, 0x605681, 0x190068,
+    0x4E4568, 0x13004F, 0x3B354F, 0x7F00FF, 0xD4AAFF, 0x5E00BD, 0x9D7EBD, 0x400081, 0x6B5681, 0x340068, 0x564568,
+    0x27004F, 0x42354F, 0xBF00FF, 0xEAAAFF, 0x8D00BD, 0xAD7EBD, 0x600081, 0x765681, 0x4E0068, 0x5F4568, 0x3B004F,
+    0x49354F, 0xFF00FF, 0xFFAAFF, 0xBD00BD, 0xBD7EBD, 0x810081, 0x815681, 0x680068, 0x684568, 0x4F004F, 0x4F354F,
+    0xFF00BF, 0xFFAAEA, 0xBD008D, 0xBD7EAD, 0x810060, 0x815676, 0x68004E, 0x68455F, 0x4F003B, 0x4F3549, 0xFF007F,
+    0xFFAAD4, 0xBD005E, 0xBD7E9D, 0x810040, 0x81566B, 0x680034, 0x684556, 0x4F0027, 0x4F3542, 0xFF003F, 0xFFAABF,
+    0xBD002E, 0xBD7E8D, 0x81001F, 0x815660, 0x680019, 0x68454E, 0x4F0013, 0x4F353B, 0x333333, 0x505050, 0x696969,
+    0x828282, 0xBEBEBE, 0xFFFFFF,
+];
 
 struct DrawingLayers(HashMap<i32, tiny_skia::PathBuilder>);
 
@@ -17,12 +46,12 @@ struct DrawingBlock {
     open_ends: Vec<Point2D>,
 }
 
-struct BlueprintLayer<'a> {
-    drawing: tiny_skia::Path,
-    color: tiny_skia::Paint<'a>,
+pub struct BlueprintLayer<'a> {
+    pub drawing: tiny_skia::Path,
+    pub color: tiny_skia::Paint<'a>,
 }
-struct Blueprint<'a> {
-    layers: Vec<BlueprintLayer<'a>>,
+pub struct Blueprint<'a> {
+    pub layers: Vec<BlueprintLayer<'a>>,
 }
 
 impl DrawingLayers {
@@ -111,8 +140,28 @@ where
     let mut open_ends = vec![];
 
     for e in list {
-        let pb = drawing_layers.request_path(e.common.color_24_bit);
-        let primary = is_primary_color(e.common.color_24_bit);
+        //println!("layer '{}'", e.common.layer);
+        let color = {
+            if e.common.color_24_bit > 0 {
+                e.common.color_24_bit
+            } else if e.common.color.is_by_block() {
+                println!("By block");
+                0x000000
+            } else if e.common.color.is_by_layer() {
+                println!("By layer");
+                0x000000
+            } else if let Some(index) = e.common.color.index() {
+                //println!("index {}", index);
+                DEFAULT_COLORS[index as usize]
+            } else {
+                0x000000
+            }
+        };
+        //println!("{} {}", color, e.common.color_24_bit);
+
+        let pb = drawing_layers.request_path(color);
+        let primary = is_primary_color(color);
+        //println!("{:?}\n================", e.specific);
         match e.specific {
             EntityType::Circle(ref circle) => {
                 pb.push_circle(circle.center.x as f32, -circle.center.y as f32, circle.radius as f32);
@@ -158,7 +207,7 @@ where
                     .post_rotate(angle.to_degrees())
                     .post_translate(ellipse.center.x as f32, -ellipse.center.y as f32);
 
-                if ellipse.start_parameter.abs() < EPSILON && (ellipse.end_parameter - TAU).abs() < EPSILON {
+                if ellipse.start_parameter.abs() < EPSILON64 && (ellipse.end_parameter - TAU).abs() < EPSILON64 {
                     // Full ellipse
                     let path = PathBuilder::from_circle(0.0, 0.0, radius)
                         .ok_or(anyhow::anyhow!("Path is empty"))?
@@ -189,7 +238,7 @@ where
                     for point in polyline.vertices.windows(2) {
                         let p1 = point[0];
                         let p2 = point[1];
-                        if p1.bulge.abs() > EPSILON {
+                        if p1.bulge.abs() > EPSILON64 {
                             bulge_draw(
                                 p1.x as f32,
                                 p1.y as f32,
@@ -206,7 +255,7 @@ where
                     let p2 = polyline.vertices.first().unwrap();
                     if polyline.flags & 1 > 0 {
                         // Closed polyline
-                        if p1.bulge.abs() > EPSILON {
+                        if p1.bulge.abs() > EPSILON64 {
                             bulge_draw(
                                 p1.x as f32,
                                 p1.y as f32,
@@ -267,19 +316,28 @@ where
                     }
                 }
             }
-            _ => (),
+
+            _ => {
+                println!("{:?}", e.specific)
+            }
         }
     }
 
     let mut layers = vec![];
     for (color, builder) in drawing_layers.0 {
-        layers.push((color, builder.finish().ok_or(anyhow::anyhow!("Path is empty"))?));
+        if let Some(path) = builder.finish() {
+            layers.push((color, path));
+        }
     }
     Ok(DrawingBlock { layers, open_ends })
 }
 
-pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
+pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
     let drawing = Drawing::load_file(filename).unwrap();
+
+    for dxf_layer in drawing.layers() {
+        println!("{:?}", dxf_layer);
+    }
 
     let mut blocks = HashMap::new();
 
@@ -291,9 +349,19 @@ pub fn load_dxf(filename: impl AsRef<Path>) -> anyhow::Result<tiny_skia::Path> {
 
     let main_block = process_entities(drawing.entities(), &blocks)?;
 
-    let mut pb = PathBuilder::new();
+    let mut result = Blueprint { layers: vec![] };
     for (color, path) in main_block.layers {
-        pb.push_path(&path);
+        let r = ((color >> 16) & 0xFF) as u8;
+        let g = ((color >> 8) & 0xFF) as u8;
+        let b = (color & 0xFF) as u8;
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(r, g, b, 255);
+        paint.anti_alias = true;
+        result.layers.push(BlueprintLayer {
+            drawing: path,
+            color: paint,
+        });
+        println!("RGB({}, {}, {})", r, g, b);
     }
-    pb.finish().ok_or(anyhow::anyhow!("Path is empty"))
+    Ok(result)
 }

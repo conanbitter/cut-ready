@@ -15,21 +15,21 @@ mod curves;
 mod geometry;
 mod inker;
 
-struct AppState {
+struct AppState<'a> {
     window: Rc<Window>,
     surface: Surface<OwnedDisplayHandle, Rc<Window>>,
-    inker: Inker,
+    inker: Inker<'a>,
     old_x: f64,
     old_y: f64,
     drag: bool,
 }
 
-struct App {
+struct App<'a> {
     context: Context<OwnedDisplayHandle>,
-    state: Option<AppState>,
+    state: Option<AppState<'a>>,
 }
 
-impl ApplicationHandler for App {
+impl<'a> ApplicationHandler for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
             let attributes = Window::default_attributes()

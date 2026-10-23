@@ -1,4 +1,5 @@
 pub const EPSILON: f32 = 0.0001;
+pub const EPSILON64: f64 = 0.0001;
 
 #[derive(Clone, Copy, Default)]
 pub struct Point2D {

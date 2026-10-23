@@ -2,6 +2,8 @@ use std::sync::LazyLock;
 
 use tiny_skia::{Color, LineCap, LineJoin, Paint, Path, Pixmap, Stroke, Transform};
 
+use crate::blueprint::Blueprint;
+
 static COLOR_MAIN: LazyLock<Paint> = LazyLock::new(|| paint_from_color(0, 100, 255));
 
 fn paint_from_color(r: u8, g: u8, b: u8) -> Paint<'static> {
@@ -11,17 +13,17 @@ fn paint_from_color(r: u8, g: u8, b: u8) -> Paint<'static> {
     paint
 }
 
-pub struct Inker {
+pub struct Inker<'a> {
     pixmap: Pixmap,
-    path: Path,
     stroke: Stroke,
     offset_x: f32,
     offset_y: f32,
     scale: f32,
+    current_blueprint: Blueprint<'a>,
 }
 
-impl Inker {
-    pub fn new(path: Path) -> Inker {
+impl<'a> Inker<'a> {
+    pub fn new(bp: Blueprint<'a>) -> Inker<'a> {
         let pixmap = Pixmap::new(256, 256).unwrap();
 
         let stroke = Stroke {
@@ -33,11 +35,11 @@ impl Inker {
 
         Inker {
             pixmap,
-            path,
             stroke,
             offset_x: 0.0,
             offset_y: 0.0,
             scale: 1.0,
+            current_blueprint: bp,
         }
     }
 
@@ -51,8 +53,12 @@ impl Inker {
         self.stroke.width = 2.0 / self.scale;
 
         self.pixmap.fill(Color::WHITE);
-        self.pixmap
-            .stroke_path(&self.path, &COLOR_MAIN, &self.stroke, transform, None);
+        for layer in &self.current_blueprint.layers {
+            self.pixmap
+                .stroke_path(&layer.drawing, &layer.color, &self.stroke, transform, None);
+        }
+        //self.pixmap
+        //    .stroke_path(&self.path, &COLOR_MAIN, &self.stroke, transform, None);
         //self.pixmap.save_png("test.png").unwrap();
         self.pixmap.data()
     }
