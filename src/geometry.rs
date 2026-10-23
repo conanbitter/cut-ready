@@ -16,6 +16,27 @@ impl Point2D {
         let dy = self.y - other.y;
         dx * dx + dy * dy
     }
+
+    pub fn transform(self, transform: tiny_skia::Transform) -> Point2D {
+        if transform.is_identity() {
+            self
+        } else if transform.is_translate() {
+            Point2D {
+                x: self.x + transform.tx,
+                y: self.y + transform.ty,
+            }
+        } else if transform.is_scale_translate() {
+            Point2D {
+                x: self.x * transform.sx + transform.tx,
+                y: self.y * transform.sy + transform.ty,
+            }
+        } else {
+            Point2D {
+                x: self.x * transform.sx + self.y * transform.kx + transform.tx,
+                y: self.x * transform.ky + self.y * transform.sy + transform.ty,
+            }
+        }
+    }
 }
 
 impl std::ops::Add for Point2D {
