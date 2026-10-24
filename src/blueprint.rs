@@ -39,6 +39,18 @@ const DEFAULT_COLORS: [i32; 256] = [
     0x828282, 0xBEBEBE, 0xFFFFFF,
 ];
 
+const LINEWIDTH_MAIN: f32 = 1.95;
+const LINEWIDTH_THICK: f32 = 2.95;
+const LINEWIDTH_OTHER: f32 = 0.95;
+
+#[derive(Debug)]
+enum LineType {
+    Main,
+    Cuts,
+    Marks,
+    Other,
+}
+
 #[derive(Default)]
 struct DrawingLayer {
     builder: tiny_skia::PathBuilder,
@@ -60,6 +72,8 @@ struct DrawingBlock {
 pub struct BlueprintLayer<'a> {
     pub drawing: tiny_skia::Path,
     pub color: tiny_skia::Paint<'a>,
+    pub line_width: f32,
+    order: u32,
 }
 pub struct Blueprint<'a> {
     pub layers: Vec<BlueprintLayer<'a>>,
@@ -86,6 +100,15 @@ impl DrawingLayer {
             }),
             None => None,
         }
+    }
+}
+
+fn get_line_type(color: i32) -> LineType {
+    match color {
+        32767 => LineType::Main,
+        33153 => LineType::Cuts,
+        0 => LineType::Marks,
+        _ => LineType::Other,
     }
 }
 
@@ -423,9 +446,19 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
         let layer_bounds = path.path.bounds();
 
+        let line_type = get_line_type(color);
+        let (line_width, order) = match line_type {
+            LineType::Main => (LINEWIDTH_MAIN, 4),
+            LineType::Cuts => (LINEWIDTH_THICK, 3),
+            LineType::Marks => (LINEWIDTH_OTHER, 2),
+            LineType::Other => (LINEWIDTH_OTHER, 1),
+        };
+
         layers.push(BlueprintLayer {
             drawing: path.path,
             color: paint,
+            line_width,
+            order,
         });
 
         if let Some(some_bounds) = bounds.as_mut() {
@@ -434,6 +467,9 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
             bounds = Some(layer_bounds);
         }
     }
+
+    layers.sort_by_key(|l| l.order);
+
     Ok(Blueprint {
         layers,
         bounds: bounds.ok_or(anyhow::anyhow!("Bounds are empty"))?,

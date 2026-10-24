@@ -34,12 +34,9 @@ impl<'a> Inker<'a> {
     }
 
     pub fn draw(&mut self) -> &[u8] {
-        //let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
-
-        self.camera.apply_to_stroke(0.95, &mut self.stroke);
-
         self.pixmap.fill(Color::WHITE);
         for layer in &self.current_blueprint.layers {
+            self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);
             self.pixmap
                 .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
         }
