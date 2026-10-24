@@ -16,6 +16,8 @@ mod curves;
 mod geometry;
 mod inker;
 
+const SPLASH_FILENAME: &str = "splash.dxf";
+
 struct AppState<'a> {
     window: Rc<Window>,
     surface: Surface<OwnedDisplayHandle, Rc<Window>>,
@@ -68,7 +70,14 @@ impl<'a> ApplicationHandler for App<'a> {
                 surface.resize(width, height).unwrap();
             }
 
-            let mut inker = Inker::new(load_dxf("tests/test.dxf").unwrap());
+            let args: Vec<String> = std::env::args().collect();
+            let filename = if args.len() > 1 {
+                args[1].clone()
+            } else {
+                String::from(SPLASH_FILENAME)
+            };
+
+            let mut inker = Inker::new(load_dxf(filename).unwrap());
             let PhysicalSize {
                 width: inner_width,
                 height: inner_height,
@@ -147,6 +156,13 @@ impl<'a> ApplicationHandler for App<'a> {
                 }
                 winit::event::MouseScrollDelta::PixelDelta(_) => (),
             },
+
+            WindowEvent::DroppedFile(path) => {
+                let blueprint = load_dxf(path).unwrap();
+                app_state.inker.current_blueprint = blueprint;
+                app_state.inker.show_all();
+                app_state.window.request_redraw();
+            }
 
             WindowEvent::RedrawRequested => {
                 let data = app_state.inker.draw();

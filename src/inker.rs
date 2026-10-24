@@ -6,7 +6,7 @@ pub struct Inker<'a> {
     pixmap: Pixmap,
     stroke: Stroke,
     pub camera: Camera,
-    current_blueprint: Blueprint<'a>,
+    pub current_blueprint: Blueprint<'a>,
 }
 
 impl<'a> Inker<'a> {
