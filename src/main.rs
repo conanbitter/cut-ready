@@ -11,6 +11,7 @@ use winit::{
 use crate::{blueprint::load_dxf, inker::Inker};
 
 mod blueprint;
+mod camera;
 mod curves;
 mod geometry;
 mod inker;
