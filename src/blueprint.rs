@@ -435,7 +435,7 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
     let mut layers = vec![];
     let mut bounds: Option<tiny_skia::Rect> = None;
-    //let mut result = Blueprint { layers: , bounds:tiny_skia::Rect::from_ltrb(-1.0,-1.0,1.0,1.0).unwrap() };
+
     for (color, path) in main_block.layers {
         let r = ((color >> 16) & 0xFF) as u8;
         let g = ((color >> 8) & 0xFF) as u8;
