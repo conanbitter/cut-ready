@@ -63,6 +63,7 @@ pub struct BlueprintLayer<'a> {
 }
 pub struct Blueprint<'a> {
     pub layers: Vec<BlueprintLayer<'a>>,
+    pub bounds: tiny_skia::Rect,
 }
 
 impl DrawingLayers {
@@ -409,7 +410,9 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
     let main_block = process_entities(drawing.entities(), &blocks, &layer_colors, false)?;
 
-    let mut result = Blueprint { layers: vec![] };
+    let mut layers = vec![];
+    let mut bounds: Option<tiny_skia::Rect> = None;
+    //let mut result = Blueprint { layers: , bounds:tiny_skia::Rect::from_ltrb(-1.0,-1.0,1.0,1.0).unwrap() };
     for (color, path) in main_block.layers {
         let r = ((color >> 16) & 0xFF) as u8;
         let g = ((color >> 8) & 0xFF) as u8;
@@ -417,10 +420,22 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         let mut paint = tiny_skia::Paint::default();
         paint.set_color_rgba8(r, g, b, 255);
         paint.anti_alias = true;
-        result.layers.push(BlueprintLayer {
+
+        let layer_bounds = path.path.bounds();
+
+        layers.push(BlueprintLayer {
             drawing: path.path,
             color: paint,
         });
+
+        if let Some(some_bounds) = bounds.as_mut() {
+            bounds = some_bounds.join(&layer_bounds);
+        } else {
+            bounds = Some(layer_bounds);
+        }
     }
-    Ok(result)
+    Ok(Blueprint {
+        layers,
+        bounds: bounds.ok_or(anyhow::anyhow!("Bounds are empty"))?,
+    })
 }

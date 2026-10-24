@@ -9,9 +9,9 @@ pub struct Camera {
     viewport_height: u32,
 }
 
-impl Camera {
-    pub fn new() -> Camera {
-        Camera {
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
             offsetx: 0.0,
             offsety: 0.0,
             scale_factor: 1.0,
@@ -20,10 +20,12 @@ impl Camera {
             viewport_height: 0,
         }
     }
+}
 
+impl Camera {
     fn update_matrix(&mut self) {
         self.matrix =
-            Transform::from_translate(self.offsetx, self.offsety).post_scale(self.scale_factor, self.scale_factor);
+            Transform::from_scale(self.scale_factor, self.scale_factor).post_translate(self.offsetx, self.offsety);
     }
 
     pub fn pan(&mut self, x: f32, y: f32) {
@@ -53,8 +55,18 @@ impl Camera {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.offsetx += (width - self.viewport_width) as f32 / 2.0;
-        self.offsety += (height - self.viewport_height) as f32 / 2.0;
+        let old_width = self.viewport_width as f32;
+        let old_height = self.viewport_height as f32;
+        let new_width = width as f32;
+        let new_height = height as f32;
+
+        self.offsetx += (new_width - old_width) / 2.0;
+        self.offsety += (new_height - old_height) / 2.0;
+
+        let scale_adjust = f32::min(new_width / old_width, new_height / old_height);
+        self.scale_factor *= scale_adjust;
+        self.adjust_offset(new_width / 2.0, new_height / 2.0, scale_adjust);
+
         self.viewport_width = width;
         self.viewport_height = height;
         self.update_matrix();

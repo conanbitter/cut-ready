@@ -20,6 +20,8 @@ struct AppState<'a> {
     window: Rc<Window>,
     surface: Surface<OwnedDisplayHandle, Rc<Window>>,
     inker: Inker<'a>,
+    mouse_x: f64,
+    mouse_y: f64,
     old_x: f64,
     old_y: f64,
     drag: bool,
@@ -66,12 +68,20 @@ impl<'a> ApplicationHandler for App<'a> {
                 surface.resize(width, height).unwrap();
             }
 
-            let inker = Inker::new(load_dxf("tests/test.dxf").unwrap());
+            let mut inker = Inker::new(load_dxf("tests/test.dxf").unwrap());
+            let PhysicalSize {
+                width: inner_width,
+                height: inner_height,
+            } = window_rc.inner_size();
+            inker.camera.set_viewport(inner_width, inner_height);
+            inker.show_all();
 
             self.state = Some(AppState {
                 window: window_rc,
                 surface,
                 inker,
+                mouse_x: 0.0,
+                mouse_y: 0.0,
                 old_x: 0.0,
                 old_y: 0.0,
                 drag: false,
@@ -88,48 +98,56 @@ impl<'a> ApplicationHandler for App<'a> {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+
             WindowEvent::Resized(size) => {
                 if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
                     app_state.surface.resize(width, height).unwrap();
                     app_state.inker.resize(size.width, size.height);
                 }
             }
+
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
                 button: _,
             } => match state {
-                winit::event::ElementState::Pressed => app_state.drag = true,
+                winit::event::ElementState::Pressed => {
+                    app_state.drag = true;
+                    app_state.old_x = app_state.mouse_x;
+                    app_state.old_y = app_state.mouse_y;
+                }
                 winit::event::ElementState::Released => app_state.drag = false,
             },
+
             WindowEvent::CursorMoved { device_id: _, position } => {
+                app_state.mouse_x = position.x;
+                app_state.mouse_y = position.y;
                 if app_state.drag {
                     let dx = position.x - app_state.old_x;
                     let dy = position.y - app_state.old_y;
-                    app_state.inker.pan(dx as f32, dy as f32);
+                    app_state.inker.camera.pan(dx as f32, dy as f32);
                     app_state.old_x = position.x;
                     app_state.old_y = position.y;
                     app_state.window.request_redraw();
-                } else {
-                    app_state.old_x = position.x;
-                    app_state.old_y = position.y;
                 }
             }
+
             WindowEvent::MouseWheel {
                 device_id: _,
                 delta,
                 phase: _,
             } => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                    if y > 0.0 {
-                        app_state.inker.scale(1.0 / 0.9);
-                    } else if y < 0.0 {
-                        app_state.inker.scale(0.9);
-                    }
+                    let factor = if y >= 0.0 { 1.0 / 0.9 } else { 0.9 };
+                    app_state
+                        .inker
+                        .camera
+                        .scale(factor, app_state.mouse_x as f32, app_state.mouse_y as f32);
                     app_state.window.request_redraw();
                 }
-                winit::event::MouseScrollDelta::PixelDelta(_) => {}
+                winit::event::MouseScrollDelta::PixelDelta(_) => (),
             },
+
             WindowEvent::RedrawRequested => {
                 let data = app_state.inker.draw();
 

@@ -1,13 +1,11 @@
-use tiny_skia::{Color, LineCap, LineJoin, Pixmap, Stroke, Transform};
+use tiny_skia::{Color, LineCap, LineJoin, Pixmap, Stroke};
 
-use crate::blueprint::Blueprint;
+use crate::{blueprint::Blueprint, camera::Camera};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
     stroke: Stroke,
-    offset_x: f32,
-    offset_y: f32,
-    scale: f32,
+    pub camera: Camera,
     current_blueprint: Blueprint<'a>,
 }
 
@@ -25,37 +23,31 @@ impl<'a> Inker<'a> {
         Inker {
             pixmap,
             stroke,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            scale: 1.0,
+            camera: Camera::default(),
             current_blueprint: bp,
         }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.pixmap = Pixmap::new(width, height).unwrap();
+        self.camera.resize(width, height);
     }
 
     pub fn draw(&mut self) -> &[u8] {
-        let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
+        //let transform = Transform::from_translate(self.offset_x, self.offset_y).post_scale(self.scale, self.scale);
 
-        self.stroke.width = 0.95 / self.scale;
+        self.camera.apply_to_stroke(0.95, &mut self.stroke);
 
         self.pixmap.fill(Color::WHITE);
         for layer in &self.current_blueprint.layers {
             self.pixmap
-                .stroke_path(&layer.drawing, &layer.color, &self.stroke, transform, None);
+                .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
         }
 
         self.pixmap.data()
     }
 
-    pub fn pan(&mut self, dx: f32, dy: f32) {
-        self.offset_x += dx / self.scale;
-        self.offset_y += dy / self.scale;
-    }
-
-    pub fn scale(&mut self, dscale: f32) {
-        self.scale *= dscale;
+    pub fn show_all(&mut self) {
+        self.camera.show_all(&self.current_blueprint.bounds);
     }
 }
