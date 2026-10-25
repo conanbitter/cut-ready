@@ -38,7 +38,7 @@ impl<'a> Inker<'a> {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.pixmap = Pixmap::new(width, height).unwrap();
-        self.camera.resize(width, height);
+        self.camera.resize(width as f32, height as f32);
     }
 
     pub fn draw(&mut self, gui: &Gui) -> &[u8] {

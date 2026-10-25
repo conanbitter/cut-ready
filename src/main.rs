@@ -9,7 +9,11 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::{blueprint::load_dxf, gui::Gui, inker::Inker};
+use crate::{
+    blueprint::load_dxf,
+    gui::{Gui, GuiCommand},
+    inker::Inker,
+};
 
 mod blueprint;
 mod camera;
@@ -31,6 +35,34 @@ struct AppState<'a> {
     old_x: f64,
     old_y: f64,
     drag: bool,
+}
+
+impl<'a> AppState<'a> {
+    fn command(&mut self, command: GuiCommand) {
+        //println!("Command {:?}", command);
+        match command {
+            GuiCommand::None => (),
+            GuiCommand::Open => (),
+            GuiCommand::Save => (),
+            GuiCommand::ZoomIn => {
+                let PhysicalSize { width, height } = self.window.inner_size();
+                self.inker
+                    .camera
+                    .scale(1.0 / 0.9, width as f32 / 2.0, height as f32 / 2.0);
+            }
+            GuiCommand::ZoomOut => {
+                let PhysicalSize { width, height } = self.window.inner_size();
+                self.inker.camera.scale(0.9, width as f32 / 2.0, height as f32 / 2.0);
+            }
+            GuiCommand::ShowAll => {
+                self.inker.show_all();
+            }
+            GuiCommand::ShowErrors => (),
+            GuiCommand::HideErrors => (),
+            GuiCommand::NextError => (),
+            GuiCommand::PrevError => (),
+        }
+    }
 }
 
 struct App<'a> {
@@ -81,12 +113,17 @@ impl<'a> ApplicationHandler for App<'a> {
                 String::from(SPLASH_FILENAME)
             };
 
+            let gui = Gui::new(2, 2);
+            let top_height = (2 + gui.height) as f32;
+
             let mut inker = Inker::new(load_dxf(filename).unwrap());
             let PhysicalSize {
                 width: inner_width,
                 height: inner_height,
             } = window_rc.inner_size();
-            inker.camera.set_viewport(inner_width, inner_height);
+            inker
+                .camera
+                .set_viewport(inner_width as f32, inner_height as f32, top_height);
             inker.show_all();
 
             self.state = Some(AppState {
@@ -98,7 +135,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 old_x: 0.0,
                 old_y: 0.0,
                 drag: false,
-                gui: Gui::new(10, 10),
+                gui,
             });
         }
     }
@@ -139,12 +176,21 @@ impl<'a> ApplicationHandler for App<'a> {
                     }
                 }
                 winit::event::ElementState::Released => {
-                    let gui_result = app_state
+                    let (gui_result, gui_command) = app_state
                         .gui
                         .mouse_release(app_state.mouse_x as i32, app_state.mouse_y as i32);
                     app_state.drag = false;
                     if gui_result.needs_redraw {
                         app_state.window.request_redraw();
+                    } else {
+                        match gui_command {
+                            GuiCommand::None => (),
+                            _ => app_state.window.request_redraw(),
+                        }
+                    }
+                    match gui_command {
+                        GuiCommand::None => (),
+                        _ => app_state.command(gui_command),
                     }
                 }
             },

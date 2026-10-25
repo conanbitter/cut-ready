@@ -223,36 +223,48 @@ pub enum GuiCommand {
 
 pub struct Gui {
     buttons: [Button; 9],
+    pub height: i32,
 }
 
 impl Gui {
     pub fn new(x: i32, y: i32) -> Gui {
         let mut curx = x;
+        let mut height = 0;
+
         let btn_open = Button::new(curx, y, "open", GuiCommand::Open, true);
         curx += btn_open.width + BUTTON_SPACING;
+        height = height.max(btn_open.height);
 
         let mut btn_save = Button::new(curx, y, "save", GuiCommand::Save, true);
         curx += btn_save.width + BUTTON_WIDE_SPACING;
         btn_save.disable();
+        height = height.max(btn_save.height);
 
         let btn_zoomin = Button::new(curx, y, "zoomin", GuiCommand::ZoomIn, true);
         curx += btn_zoomin.width + BUTTON_SPACING;
+        height = height.max(btn_zoomin.height);
 
         let btn_zoomout = Button::new(curx, y, "zoomout", GuiCommand::ZoomOut, true);
         curx += btn_zoomout.width + BUTTON_SPACING;
+        height = height.max(btn_zoomout.height);
 
         let btn_showall = Button::new(curx, y, "showall", GuiCommand::ShowAll, true);
         curx += btn_showall.width + BUTTON_WIDE_SPACING;
+        height = height.max(btn_showall.height);
 
         let btn_shown = Button::new(curx, y, "shown", GuiCommand::HideErrors, true);
+        height = height.max(btn_shown.height);
 
         let btn_hidden = Button::new(curx, y, "hidden", GuiCommand::ShowErrors, false);
         curx += btn_shown.width + BUTTON_SPACING;
+        height = height.max(btn_hidden.height);
 
         let btn_prev = Button::new(curx, y, "prev", GuiCommand::PrevError, true);
         curx += btn_prev.width + BUTTON_SPACING;
+        height = height.max(btn_prev.height);
 
         let btn_next = Button::new(curx, y, "next", GuiCommand::NextError, true);
+        height = height.max(btn_next.height);
 
         Gui {
             buttons: [
@@ -266,7 +278,7 @@ impl Gui {
                 btn_prev,
                 btn_next,
             ],
-            show_errors: true,
+            height,
         }
     }
 
@@ -308,7 +320,7 @@ impl Gui {
         total_res
     }
 
-    pub fn mouse_release(&mut self, x: i32, y: i32) -> GuiInteractionResult {
+    pub fn mouse_release(&mut self, x: i32, y: i32) -> (GuiInteractionResult, GuiCommand) {
         let mut total_res = GuiInteractionResult::default();
         let mut res_command = GuiCommand::None;
         for btn in &mut self.buttons {
@@ -326,6 +338,6 @@ impl Gui {
             _ => (),
         }
 
-        total_res
+        (total_res, res_command)
     }
 }
