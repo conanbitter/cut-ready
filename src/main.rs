@@ -9,12 +9,13 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::{blueprint::load_dxf, inker::Inker};
+use crate::{blueprint::load_dxf, gui::Gui, inker::Inker};
 
 mod blueprint;
 mod camera;
 mod curves;
 mod geometry;
+mod gui;
 mod inker;
 mod pointerrors;
 
@@ -24,6 +25,7 @@ struct AppState<'a> {
     window: Rc<Window>,
     surface: Surface<OwnedDisplayHandle, Rc<Window>>,
     inker: Inker<'a>,
+    gui: Gui,
     mouse_x: f64,
     mouse_y: f64,
     old_x: f64,
@@ -96,6 +98,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 old_x: 0.0,
                 old_y: 0.0,
                 drag: false,
+                gui: Gui::new(),
             });
         }
     }
@@ -123,22 +126,47 @@ impl<'a> ApplicationHandler for App<'a> {
                 button: _,
             } => match state {
                 winit::event::ElementState::Pressed => {
-                    app_state.drag = true;
-                    app_state.old_x = app_state.mouse_x;
-                    app_state.old_y = app_state.mouse_y;
+                    let gui_result = app_state
+                        .gui
+                        .mouse_press(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                    if !gui_result.captured {
+                        app_state.drag = true;
+                        app_state.old_x = app_state.mouse_x;
+                        app_state.old_y = app_state.mouse_y;
+                    }
+                    if gui_result.needs_redraw {
+                        app_state.window.request_redraw();
+                    }
                 }
-                winit::event::ElementState::Released => app_state.drag = false,
+                winit::event::ElementState::Released => {
+                    let gui_result = app_state
+                        .gui
+                        .mouse_release(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                    app_state.drag = false;
+                    if gui_result.needs_redraw {
+                        app_state.window.request_redraw();
+                    }
+                }
             },
 
             WindowEvent::CursorMoved { device_id: _, position } => {
                 app_state.mouse_x = position.x;
                 app_state.mouse_y = position.y;
-                if app_state.drag {
-                    let dx = position.x - app_state.old_x;
-                    let dy = position.y - app_state.old_y;
-                    app_state.inker.camera.pan(dx as f32, dy as f32);
-                    app_state.old_x = position.x;
-                    app_state.old_y = position.y;
+                let gui_result = app_state.gui.mouse_move(position.x as i32, position.y as i32);
+                let mut needs_redraw = gui_result.needs_redraw;
+                if gui_result.captured {
+                    app_state.drag = false;
+                } else {
+                    if app_state.drag {
+                        let dx = position.x - app_state.old_x;
+                        let dy = position.y - app_state.old_y;
+                        app_state.inker.camera.pan(dx as f32, dy as f32);
+                        app_state.old_x = position.x;
+                        app_state.old_y = position.y;
+                        needs_redraw = true;
+                    }
+                }
+                if needs_redraw {
                     app_state.window.request_redraw();
                 }
             }
@@ -192,7 +220,7 @@ impl<'a> ApplicationHandler for App<'a> {
             }
 
             WindowEvent::RedrawRequested => {
-                let data = app_state.inker.draw();
+                let data = app_state.inker.draw(&app_state.gui);
 
                 let mut buffer = app_state.surface.buffer_mut().unwrap();
 
