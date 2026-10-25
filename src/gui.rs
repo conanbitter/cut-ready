@@ -288,18 +288,25 @@ impl Gui {
         }
     }
 
-    pub fn hide_errors(&mut self) {
+    pub fn hide_errors(&mut self, permanent: bool) {
         self.buttons[5].visible = false;
         self.buttons[6].visible = true;
-        self.buttons[6].state = ButtonState::Hovered;
+        if permanent {
+            self.buttons[6].state = ButtonState::Disabled;
+        } else {
+            self.buttons[6].state = ButtonState::Hovered;
+        }
         self.buttons[7].disable();
         self.buttons[8].disable();
     }
 
-    pub fn show_errors(&mut self) {
+    pub fn show_errors(&mut self, permanent: bool) {
         self.buttons[5].visible = true;
         self.buttons[5].state = ButtonState::Hovered;
         self.buttons[6].visible = false;
+        if permanent {
+            self.buttons[6].state = ButtonState::Normal;
+        }
         self.buttons[7].enable();
         self.buttons[8].enable();
     }
@@ -333,8 +340,8 @@ impl Gui {
         }
 
         match res_command {
-            GuiCommand::HideErrors => self.hide_errors(),
-            GuiCommand::ShowErrors => self.show_errors(),
+            GuiCommand::HideErrors => self.hide_errors(false),
+            GuiCommand::ShowErrors => self.show_errors(false),
             _ => (),
         }
 

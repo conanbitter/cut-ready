@@ -41,7 +41,7 @@ impl<'a> Inker<'a> {
         self.camera.resize(width as f32, height as f32);
     }
 
-    pub fn draw(&mut self, gui: &Gui) -> &[u8] {
+    pub fn draw(&mut self, gui: &Gui, show_errors: bool) -> &[u8] {
         self.pixmap.fill(Color::WHITE);
 
         for layer in &self.current_blueprint.layers {
@@ -50,11 +50,13 @@ impl<'a> Inker<'a> {
                 .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
         }
 
-        self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
-        if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
-            self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
-            self.pixmap
-                .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
+        if show_errors {
+            self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
+            if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
+                self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
+                self.pixmap
+                    .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
+            }
         }
 
         gui.draw(&mut self.pixmap);

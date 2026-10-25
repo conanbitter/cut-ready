@@ -1,5 +1,10 @@
+use rfd::FileDialog;
 use softbuffer::{Context, Surface};
-use std::{num::NonZeroU32, rc::Rc};
+use std::{
+    num::NonZeroU32,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -35,14 +40,47 @@ struct AppState<'a> {
     old_x: f64,
     old_y: f64,
     drag: bool,
+    show_errors: bool,
 }
 
 impl<'a> AppState<'a> {
+    fn open_file(&mut self, path: PathBuf) {
+        /*println!(
+            "name {}  path {}",
+            path.file_name().unwrap().display(),
+            std::path::absolute(&path).unwrap().parent().unwrap().display()
+        );*/
+        self.window
+            .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
+        let blueprint = load_dxf(path).unwrap();
+        if blueprint.errors.path.is_none() {
+            self.gui.hide_errors(true);
+            self.show_errors = false;
+        } else {
+            self.gui.show_errors(true);
+            self.show_errors = true;
+        }
+        self.inker.current_blueprint = blueprint;
+        self.inker.show_all();
+
+        self.window.request_redraw();
+    }
+
     fn command(&mut self, command: GuiCommand) {
         //println!("Command {:?}", command);
         match command {
             GuiCommand::None => (),
-            GuiCommand::Open => (),
+            GuiCommand::Open => {
+                if let Some(file) = FileDialog::new()
+                    .set_title("Open DXF file")
+                    .add_filter("DXF files", &["dxf"])
+                    .set_directory("/")
+                    .set_parent(&self.window)
+                    .pick_file()
+                {
+                    self.open_file(file);
+                }
+            }
             GuiCommand::Save => (),
             GuiCommand::ZoomIn => {
                 let PhysicalSize { width, height } = self.window.inner_size();
@@ -57,10 +95,20 @@ impl<'a> AppState<'a> {
             GuiCommand::ShowAll => {
                 self.inker.show_all();
             }
-            GuiCommand::ShowErrors => (),
-            GuiCommand::HideErrors => (),
-            GuiCommand::NextError => (),
-            GuiCommand::PrevError => (),
+            GuiCommand::ShowErrors => {
+                self.show_errors = true;
+            }
+            GuiCommand::HideErrors => {
+                self.show_errors = false;
+            }
+            GuiCommand::NextError => {
+                let point = self.inker.current_blueprint.errors.next_error();
+                self.inker.camera.move_to(point);
+            }
+            GuiCommand::PrevError => {
+                let point = self.inker.current_blueprint.errors.prev_error();
+                self.inker.camera.move_to(point);
+            }
         }
     }
 }
@@ -136,6 +184,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 old_y: 0.0,
                 drag: false,
                 gui,
+                show_errors: true,
             });
         }
     }
@@ -244,13 +293,23 @@ impl<'a> ApplicationHandler for App<'a> {
                 {
                     match code {
                         KeyCode::ArrowRight => {
-                            let point = app_state.inker.current_blueprint.errors.next_error();
-                            app_state.inker.camera.move_to(point);
-                            app_state.window.request_redraw();
+                            if app_state.show_errors {
+                                app_state.command(GuiCommand::NextError);
+                                app_state.window.request_redraw();
+                            }
                         }
                         KeyCode::ArrowLeft => {
-                            let point = app_state.inker.current_blueprint.errors.prev_error();
-                            app_state.inker.camera.move_to(point);
+                            if app_state.show_errors {
+                                app_state.command(GuiCommand::PrevError);
+                                app_state.window.request_redraw();
+                            }
+                        }
+                        KeyCode::Equal => {
+                            app_state.command(GuiCommand::ZoomIn);
+                            app_state.window.request_redraw();
+                        }
+                        KeyCode::Minus => {
+                            app_state.command(GuiCommand::ZoomOut);
                             app_state.window.request_redraw();
                         }
                         _ => (),
@@ -259,14 +318,11 @@ impl<'a> ApplicationHandler for App<'a> {
             }
 
             WindowEvent::DroppedFile(path) => {
-                let blueprint = load_dxf(path).unwrap();
-                app_state.inker.current_blueprint = blueprint;
-                app_state.inker.show_all();
-                app_state.window.request_redraw();
+                app_state.open_file(path);
             }
 
             WindowEvent::RedrawRequested => {
-                let data = app_state.inker.draw(&app_state.gui);
+                let data = app_state.inker.draw(&app_state.gui, app_state.show_errors);
 
                 let mut buffer = app_state.surface.buffer_mut().unwrap();
 
