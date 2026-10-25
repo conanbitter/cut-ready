@@ -98,7 +98,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 old_x: 0.0,
                 old_y: 0.0,
                 drag: false,
-                gui: Gui::new(),
+                gui: Gui::new(10, 10),
             });
         }
     }
