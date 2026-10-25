@@ -1,12 +1,13 @@
-use tiny_skia::{Color, LineCap, LineJoin, Pixmap, Stroke};
+use tiny_skia::{Color, LineCap, LineJoin, Paint, Pixmap, Stroke};
 
-use crate::{blueprint::Blueprint, camera::Camera};
+use crate::{blueprint::Blueprint, camera::Camera, pointerrors::ERROR_LINE_WIDTH};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
     stroke: Stroke,
     pub camera: Camera,
     pub current_blueprint: Blueprint<'a>,
+    error_paint: Paint<'a>,
 }
 
 impl<'a> Inker<'a> {
@@ -20,11 +21,18 @@ impl<'a> Inker<'a> {
             ..Stroke::default()
         };
 
+        let error_paint = Paint {
+            anti_alias: true,
+            shader: tiny_skia::Shader::SolidColor(Color::from_rgba8(255, 0, 0, 255)),
+            ..Paint::default()
+        };
+
         Inker {
             pixmap,
             stroke,
             camera: Camera::default(),
             current_blueprint: bp,
+            error_paint,
         }
     }
 
@@ -39,6 +47,12 @@ impl<'a> Inker<'a> {
             self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);
             self.pixmap
                 .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
+        }
+        self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
+        if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
+            self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
+            self.pixmap
+                .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
         }
 
         self.pixmap.data()

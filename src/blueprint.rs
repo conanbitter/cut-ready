@@ -8,7 +8,7 @@ use tiny_skia::{PathBuilder, Transform};
 use crate::{
     curves::curve_path,
     geometry::{EPSILON64, Point2D},
-    pointerrors::collect_errors,
+    pointerrors::{PointErrors, collect_errors},
 };
 
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
@@ -79,6 +79,7 @@ pub struct BlueprintLayer<'a> {
 pub struct Blueprint<'a> {
     pub layers: Vec<BlueprintLayer<'a>>,
     pub bounds: tiny_skia::Rect,
+    pub errors: PointErrors,
 }
 
 impl DrawingLayers {
@@ -477,29 +478,11 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
     layers.sort_by_key(|l| l.order);
 
-    let mut pb = PathBuilder::new();
-    for point in collect_errors(&open_ends) {
-        pb.push_circle(point.x, point.y, 5.0);
-        pb.move_to(point.x - 5.0, point.y - 5.0);
-        pb.line_to(point.x + 5.0, point.y + 5.0);
-        pb.move_to(point.x + 5.0, point.y - 5.0);
-        pb.line_to(point.x - 5.0, point.y + 5.0);
-    }
-    if !pb.is_empty() {
-        let errpath = pb.finish().unwrap();
-        let mut errpaint = tiny_skia::Paint::default();
-        errpaint.set_color_rgba8(255, 0, 0, 255);
-        errpaint.anti_alias = true;
-        layers.push(BlueprintLayer {
-            drawing: errpath,
-            color: errpaint,
-            line_width: 1.0,
-            order: 0,
-        });
-    }
+    let errors = PointErrors::new(collect_errors(&open_ends));
 
     Ok(Blueprint {
         layers,
         bounds: bounds.ok_or(anyhow::anyhow!("Bounds are empty"))?,
+        errors,
     })
 }
