@@ -1,4 +1,4 @@
-use tiny_skia::{Path, PathBuilder};
+use tiny_skia::PathBuilder;
 
 use crate::geometry::Point2D;
 
@@ -12,6 +12,7 @@ pub struct PointErrors {
     points: Vec<Point2D>,
     pub path: Option<tiny_skia::Path>,
     old_scale: f32,
+    current_error: usize,
 }
 
 impl PointErrors {
@@ -24,6 +25,7 @@ impl PointErrors {
             pb.finish()
         };
         PointErrors {
+            current_error: points.len(),
             points,
             old_scale: 1.0,
             path,
@@ -51,6 +53,24 @@ impl PointErrors {
             self.path = Some(pb.finish().unwrap());
             self.old_scale = new_scale;
         }
+    }
+
+    pub fn next_error(&mut self) -> Point2D {
+        if self.current_error >= self.points.len() - 1 {
+            self.current_error = 0;
+        } else {
+            self.current_error += 1;
+        }
+        self.points[self.current_error]
+    }
+
+    pub fn prev_error(&mut self) -> Point2D {
+        if self.current_error == 0 {
+            self.current_error = self.points.len() - 1;
+        } else {
+            self.current_error -= 1;
+        }
+        self.points[self.current_error]
     }
 }
 

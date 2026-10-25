@@ -5,6 +5,7 @@ use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, OwnedDisplayHandle},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
@@ -157,6 +158,31 @@ impl<'a> ApplicationHandler for App<'a> {
                 }
                 winit::event::MouseScrollDelta::PixelDelta(_) => (),
             },
+
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                if event.state.is_pressed()
+                    && !event.repeat
+                    && let PhysicalKey::Code(code) = event.physical_key
+                {
+                    match code {
+                        KeyCode::ArrowRight => {
+                            let point = app_state.inker.current_blueprint.errors.next_error();
+                            app_state.inker.camera.move_to(point);
+                            app_state.window.request_redraw();
+                        }
+                        KeyCode::ArrowLeft => {
+                            let point = app_state.inker.current_blueprint.errors.prev_error();
+                            app_state.inker.camera.move_to(point);
+                            app_state.window.request_redraw();
+                        }
+                        _ => (),
+                    }
+                }
+            }
 
             WindowEvent::DroppedFile(path) => {
                 let blueprint = load_dxf(path).unwrap();

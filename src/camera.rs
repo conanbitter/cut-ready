@@ -1,5 +1,7 @@
 use tiny_skia::Transform;
 
+use crate::geometry::Point2D;
+
 pub struct Camera {
     offsetx: f32,
     offsety: f32,
@@ -83,6 +85,12 @@ impl Camera {
         self.offsetx = self.viewport_width as f32 / 2.0 - (bounds.left() + bounds.width() / 2.0) * self.scale_factor;
         self.offsety = self.viewport_height as f32 / 2.0 - (bounds.top() + bounds.height() / 2.0) * self.scale_factor;
 
+        self.update_matrix();
+    }
+
+    pub fn move_to(&mut self, point: Point2D) {
+        self.offsetx = self.viewport_width as f32 / 2.0 - point.x * self.scale_factor;
+        self.offsety = self.viewport_height as f32 / 2.0 - point.y * self.scale_factor;
         self.update_matrix();
     }
 }
