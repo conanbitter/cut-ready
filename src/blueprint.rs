@@ -3,7 +3,7 @@ use dxf::{
     entities::{Entity, EntityType},
 };
 use std::{collections::HashMap, f64::consts::TAU, path::Path, vec};
-use tiny_skia::{PathBuilder, Transform};
+use tiny_skia::{PathBuilder, Rect, Transform};
 
 use crate::{
     curves::curve_path,
@@ -101,6 +101,16 @@ impl DrawingLayer {
                 open_ends: self.open_ends,
             }),
             None => None,
+        }
+    }
+}
+
+impl<'a> Default for Blueprint<'a> {
+    fn default() -> Self {
+        Self {
+            layers: Default::default(),
+            bounds: Rect::from_xywh(0.0, 0.0, 0.0, 0.0).unwrap(),
+            errors: Default::default(),
         }
     }
 }
@@ -417,7 +427,7 @@ where
 }
 
 pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
-    let drawing = Drawing::load_file(filename).unwrap();
+    let drawing = Drawing::load_file(filename)?;
 
     let layer_colors: HashMap<String, i32> = drawing
         .layers()

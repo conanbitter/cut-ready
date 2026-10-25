@@ -74,6 +74,17 @@ impl PointErrors {
     }
 }
 
+impl Default for PointErrors {
+    fn default() -> Self {
+        Self {
+            points: Default::default(),
+            path: None,
+            old_scale: 1.0,
+            current_error: 0,
+        }
+    }
+}
+
 pub fn collect_errors(open_ends: &[Point2D]) -> Vec<Point2D> {
     let mut removed = vec![false; open_ends.len()];
 

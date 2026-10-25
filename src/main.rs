@@ -1,10 +1,6 @@
-use rfd::FileDialog;
+use rfd::{AsyncMessageDialog, FileDialog, MessageButtons, MessageLevel};
 use softbuffer::{Context, Surface};
-use std::{
-    num::NonZeroU32,
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{num::NonZeroU32, path::PathBuf, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -43,27 +39,49 @@ struct AppState<'a> {
     show_errors: bool,
 }
 
+fn error_message(window: &Window, title: &str, message: &str) {
+    let dialog = AsyncMessageDialog::new()
+        .set_parent(window)
+        .set_title(title)
+        .set_description(message)
+        .set_level(MessageLevel::Error)
+        .set_buttons(MessageButtons::Ok)
+        .show();
+
+    std::thread::spawn(move || {
+        futures::executor::block_on(dialog);
+    });
+}
+
 impl<'a> AppState<'a> {
-    fn open_file(&mut self, path: PathBuf) {
+    fn open_file(&mut self, path: PathBuf, is_splash: bool) {
         /*println!(
             "name {}  path {}",
             path.file_name().unwrap().display(),
             std::path::absolute(&path).unwrap().parent().unwrap().display()
         );*/
-        self.window
-            .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
-        let blueprint = load_dxf(path).unwrap();
-        if blueprint.errors.path.is_none() {
-            self.gui.hide_errors(true);
-            self.show_errors = false;
-        } else {
-            self.gui.show_errors(true);
-            self.show_errors = true;
+        if !is_splash {
+            self.window
+                .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
         }
-        self.inker.current_blueprint = blueprint;
-        self.inker.show_all();
+        match load_dxf(path) {
+            Ok(blueprint) => {
+                if blueprint.errors.path.is_none() {
+                    self.gui.hide_errors(true);
+                    self.show_errors = false;
+                } else {
+                    self.gui.show_errors(true);
+                    self.show_errors = true;
+                }
+                self.inker.current_blueprint = blueprint;
+                self.inker.show_all();
 
-        self.window.request_redraw();
+                self.window.request_redraw();
+            }
+            Err(_) => {
+                error_message(&self.window, "File error", "Error opening DXF file");
+            }
+        }
     }
 
     fn command(&mut self, command: GuiCommand) {
@@ -73,12 +91,11 @@ impl<'a> AppState<'a> {
             GuiCommand::Open => {
                 if let Some(file) = FileDialog::new()
                     .set_title("Open DXF file")
-                    .add_filter("DXF files", &["dxf"])
-                    .set_directory("/")
+                    .add_filter("DXF files", &["dxf", "*"])
                     .set_parent(&self.window)
                     .pick_file()
                 {
-                    self.open_file(file);
+                    self.open_file(file, false);
                 }
             }
             GuiCommand::Save => (),
@@ -154,17 +171,10 @@ impl<'a> ApplicationHandler for App<'a> {
                 surface.resize(width, height).unwrap();
             }
 
-            let args: Vec<String> = std::env::args().collect();
-            let filename = if args.len() > 1 {
-                args[1].clone()
-            } else {
-                String::from(SPLASH_FILENAME)
-            };
-
             let gui = Gui::new(2, 2);
             let top_height = (2 + gui.height) as f32;
 
-            let mut inker = Inker::new(load_dxf(filename).unwrap());
+            let mut inker = Inker::new();
             let PhysicalSize {
                 width: inner_width,
                 height: inner_height,
@@ -184,8 +194,17 @@ impl<'a> ApplicationHandler for App<'a> {
                 old_y: 0.0,
                 drag: false,
                 gui,
-                show_errors: true,
+                show_errors: false,
             });
+
+            if let Some(state) = self.state.as_mut() {
+                let args: Vec<String> = std::env::args().collect();
+                if args.len() > 1 {
+                    state.open_file(PathBuf::from(args[1].clone()), false);
+                } else {
+                    state.open_file(PathBuf::from(SPLASH_FILENAME), true);
+                };
+            }
         }
     }
 
@@ -318,7 +337,7 @@ impl<'a> ApplicationHandler for App<'a> {
             }
 
             WindowEvent::DroppedFile(path) => {
-                app_state.open_file(path);
+                app_state.open_file(path, false);
             }
 
             WindowEvent::RedrawRequested => {

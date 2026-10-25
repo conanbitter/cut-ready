@@ -252,19 +252,22 @@ impl Gui {
         curx += btn_showall.width + BUTTON_WIDE_SPACING;
         height = height.max(btn_showall.height);
 
-        let btn_shown = Button::new(curx, y, "shown", GuiCommand::HideErrors, true);
+        let btn_shown = Button::new(curx, y, "shown", GuiCommand::HideErrors, false);
         height = height.max(btn_shown.height);
 
-        let btn_hidden = Button::new(curx, y, "hidden", GuiCommand::ShowErrors, false);
+        let mut btn_hidden = Button::new(curx, y, "hidden", GuiCommand::ShowErrors, true);
         curx += btn_shown.width + BUTTON_SPACING;
+        btn_hidden.disable();
         height = height.max(btn_hidden.height);
 
-        let btn_prev = Button::new(curx, y, "prev", GuiCommand::PrevError, true);
+        let mut btn_prev = Button::new(curx, y, "prev", GuiCommand::PrevError, true);
         curx += btn_prev.width + BUTTON_SPACING;
+        btn_prev.disable();
         height = height.max(btn_prev.height);
 
-        let btn_next = Button::new(curx, y, "next", GuiCommand::NextError, true);
+        let mut btn_next = Button::new(curx, y, "next", GuiCommand::NextError, true);
         height = height.max(btn_next.height);
+        btn_next.disable();
 
         Gui {
             buttons: [

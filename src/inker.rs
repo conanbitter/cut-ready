@@ -11,7 +11,7 @@ pub struct Inker<'a> {
 }
 
 impl<'a> Inker<'a> {
-    pub fn new(bp: Blueprint<'a>) -> Inker<'a> {
+    pub fn new() -> Inker<'a> {
         let pixmap = Pixmap::new(256, 256).unwrap();
 
         let stroke = Stroke {
@@ -31,7 +31,7 @@ impl<'a> Inker<'a> {
             pixmap,
             stroke,
             camera: Camera::default(),
-            current_blueprint: bp,
+            current_blueprint: Blueprint::default(),
             error_paint,
         }
     }
