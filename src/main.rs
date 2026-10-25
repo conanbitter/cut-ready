@@ -15,8 +15,9 @@ mod camera;
 mod curves;
 mod geometry;
 mod inker;
+mod pointerrors;
 
-const SPLASH_FILENAME: &str = "splash.dxf";
+const SPLASH_FILENAME: &str = "tests/alltest2000.dxf"; //"splash.dxf";
 
 struct AppState<'a> {
     window: Rc<Window>,

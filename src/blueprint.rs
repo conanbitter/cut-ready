@@ -2,12 +2,13 @@ use dxf::{
     Drawing,
     entities::{Entity, EntityType},
 };
-use std::{collections::HashMap, f64::consts::TAU, path::Path};
+use std::{collections::HashMap, f64::consts::TAU, path::Path, vec};
 use tiny_skia::{PathBuilder, Transform};
 
 use crate::{
     curves::curve_path,
     geometry::{EPSILON64, Point2D},
+    pointerrors::collect_errors,
 };
 
 const MAX_SEGMENT_ANGLE: f32 = std::f32::consts::FRAC_PI_2;
@@ -105,8 +106,8 @@ impl DrawingLayer {
 
 fn get_line_type(color: i32) -> LineType {
     match color {
-        32767 => LineType::Main,
-        33153 => LineType::Cuts,
+        32767 | 33023 => LineType::Main,
+        33153 | 38550 => LineType::Cuts,
         0 => LineType::Marks,
         _ => LineType::Other,
     }
@@ -254,8 +255,8 @@ where
                 let end_angle = arc.end_angle.to_radians() as f32;
                 pb.push_path(&arc_path(cx, cy, r, start_angle, end_angle)?);
 
-                let start_point = Point2D::new(cx + r * start_angle.cos(), cy + r * start_angle.sin());
-                let end_point = Point2D::new(cx + r * end_angle.cos(), cy + r * end_angle.sin());
+                let start_point = Point2D::new(cx + r * start_angle.cos(), -(cy + r * start_angle.sin()));
+                let end_point = Point2D::new(cx + r * end_angle.cos(), -(cy + r * end_angle.sin()));
                 open_ends.push(start_point);
                 open_ends.push(end_point);
             }
@@ -288,8 +289,8 @@ where
                         .ok_or(anyhow::anyhow!("Cant transform an ellipse"))?;
                     pb.push_path(&path);
 
-                    let start_point = Point2D::new(radius * start_angle.cos(), radius * start_angle.sin());
-                    let end_point = Point2D::new(radius * end_angle.cos(), radius * end_angle.sin());
+                    let start_point = Point2D::new(radius * start_angle.cos(), -radius * start_angle.sin());
+                    let end_point = Point2D::new(radius * end_angle.cos(), -radius * end_angle.sin());
                     open_ends.push(start_point.transform(transform));
                     open_ends.push(end_point.transform(transform));
                 };
@@ -337,20 +338,22 @@ where
 
                     if polyline.flags & 1 == 0 {
                         // Open polyline
-                        open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
-                        open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
+                        open_ends.push(Point2D::new(p1.x as f32, -p1.y as f32));
+                        open_ends.push(Point2D::new(p2.x as f32, -p2.y as f32));
                     }
                 }
             }
 
             EntityType::Spline(ref spline) => {
-                pb.push_path(&curve_path(spline).unwrap());
+                pb.push_path(&curve_path(spline)?);
                 if spline.flags & 1 == 0 {
                     //Open spline
                     let p1 = spline.control_points.first().unwrap();
                     let p2 = spline.control_points.last().unwrap();
-                    open_ends.push(Point2D::new(p1.x as f32, p1.y as f32));
-                    open_ends.push(Point2D::new(p2.x as f32, p2.y as f32));
+                    let start_point = Point2D::new(p1.x as f32, -p1.y as f32);
+                    let end_point = Point2D::new(p2.x as f32, -p2.y as f32);
+                    open_ends.push(start_point);
+                    open_ends.push(end_point);
                 }
             }
 
@@ -435,6 +438,7 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
     let mut layers = vec![];
     let mut bounds: Option<tiny_skia::Rect> = None;
+    let mut open_ends = vec![];
 
     for (color, path) in main_block.layers {
         let r = ((color >> 16) & 0xFF) as u8;
@@ -448,7 +452,10 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
         let line_type = get_line_type(color);
         let (line_width, order) = match line_type {
-            LineType::Main => (LINEWIDTH_MAIN, 4),
+            LineType::Main => {
+                open_ends.extend(path.open_ends);
+                (LINEWIDTH_MAIN, 4)
+            }
             LineType::Cuts => (LINEWIDTH_THICK, 3),
             LineType::Marks => (LINEWIDTH_OTHER, 2),
             LineType::Other => (LINEWIDTH_OTHER, 1),
@@ -469,6 +476,27 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     }
 
     layers.sort_by_key(|l| l.order);
+
+    let mut pb = PathBuilder::new();
+    for point in collect_errors(&open_ends) {
+        pb.push_circle(point.x, point.y, 5.0);
+        pb.move_to(point.x - 5.0, point.y - 5.0);
+        pb.line_to(point.x + 5.0, point.y + 5.0);
+        pb.move_to(point.x + 5.0, point.y - 5.0);
+        pb.line_to(point.x - 5.0, point.y + 5.0);
+    }
+    if !pb.is_empty() {
+        let errpath = pb.finish().unwrap();
+        let mut errpaint = tiny_skia::Paint::default();
+        errpaint.set_color_rgba8(255, 0, 0, 255);
+        errpaint.anti_alias = true;
+        layers.push(BlueprintLayer {
+            drawing: errpath,
+            color: errpaint,
+            line_width: 1.0,
+            order: 0,
+        });
+    }
 
     Ok(Blueprint {
         layers,
