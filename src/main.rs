@@ -26,7 +26,7 @@ mod gui;
 mod inker;
 mod pointerrors;
 
-const SPLASH_FILENAME: &str = "tests/test.dxf"; //"splash.dxf";
+const SPLASH_FILENAME: &str = "tests/test1.die"; //"splash.dxf";
 
 struct AppState<'a> {
     window: Rc<Window>,

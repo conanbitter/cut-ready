@@ -124,7 +124,7 @@ fn get_line_type(color: i32) -> LineType {
     }
 }
 
-fn arc_draw(cx: f32, cy: f32, r: f32, start_angle: f32, sweep_angle: f32, moveto: bool, builder: &mut PathBuilder) {
+pub fn arc_draw(cx: f32, cy: f32, r: f32, start_angle: f32, sweep_angle: f32, moveto: bool, builder: &mut PathBuilder) {
     let segments_count = (sweep_angle.abs() / MAX_SEGMENT_ANGLE).ceil() as usize;
     let segment_sweep = sweep_angle / segments_count as f32;
 
