@@ -12,6 +12,7 @@ use winit::{
 
 use crate::{
     blueprint::load_dxf,
+    diereader::load_die,
     gui::{Gui, GuiCommand},
     inker::Inker,
 };
@@ -19,6 +20,7 @@ use crate::{
 mod blueprint;
 mod camera;
 mod curves;
+mod diereader;
 mod geometry;
 mod gui;
 mod inker;
@@ -409,6 +411,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
+    load_die("tests/test1.die").unwrap();
+    return Ok(());
+
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
