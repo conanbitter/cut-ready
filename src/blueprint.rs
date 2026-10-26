@@ -40,9 +40,9 @@ const DEFAULT_COLORS: [i32; 256] = [
     0x828282, 0xBEBEBE, 0xFFFFFF,
 ];
 
-const LINEWIDTH_MAIN: f32 = 1.95;
-const LINEWIDTH_THICK: f32 = 2.95;
-const LINEWIDTH_OTHER: f32 = 0.95;
+pub const LINEWIDTH_MAIN: f32 = 1.95;
+pub const LINEWIDTH_THICK: f32 = 2.95;
+pub const LINEWIDTH_OTHER: f32 = 0.95;
 
 #[derive(Debug)]
 enum LineType {
@@ -74,7 +74,7 @@ pub struct BlueprintLayer<'a> {
     pub drawing: tiny_skia::Path,
     pub color: tiny_skia::Paint<'a>,
     pub line_width: f32,
-    order: u32,
+    pub order: u32,
 }
 pub struct Blueprint<'a> {
     pub layers: Vec<BlueprintLayer<'a>>,

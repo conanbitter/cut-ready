@@ -1,6 +1,6 @@
 use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
 use softbuffer::{Context, Surface};
-use std::{num::NonZeroU32, path::PathBuf, rc::Rc};
+use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -101,7 +101,14 @@ impl<'a> AppState<'a> {
             self.window
                 .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
         }
-        match load_dxf(path) {
+
+        let readed = if path.extension() == Some(OsStr::new("die")) {
+            load_die(path)
+        } else {
+            load_dxf(path)
+        };
+        //println!("{}", path.extension().unwrap().display());
+        match readed {
             Ok(blueprint) => {
                 if blueprint.errors.path.is_none() {
                     self.gui.hide_errors(true);
@@ -115,8 +122,8 @@ impl<'a> AppState<'a> {
 
                 self.window.request_redraw();
             }
-            Err(_) => {
-                self.error_message("File error", "Error opening DXF file");
+            Err(err) => {
+                self.error_message("File error", format!("Error opening file\n{}", err).as_str());
             }
         }
     }
@@ -411,9 +418,6 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
-    load_die("tests/test1.die").unwrap();
-    return Ok(());
-
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
