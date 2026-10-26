@@ -1,11 +1,11 @@
-use rfd::{AsyncMessageDialog, FileDialog, MessageButtons, MessageLevel};
+use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
 use softbuffer::{Context, Surface};
 use std::{num::NonZeroU32, path::PathBuf, rc::Rc};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, OwnedDisplayHandle},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy, OwnedDisplayHandle},
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
@@ -37,29 +37,64 @@ struct AppState<'a> {
     old_y: f64,
     drag: bool,
     show_errors: bool,
+    event_proxy: EventLoopProxy<UserEvent>,
 }
 
-fn error_message(window: &Window, title: &str, message: &str) {
-    let dialog = AsyncMessageDialog::new()
-        .set_parent(window)
-        .set_title(title)
-        .set_description(message)
-        .set_level(MessageLevel::Error)
-        .set_buttons(MessageButtons::Ok)
-        .show();
-
-    std::thread::spawn(move || {
-        futures::executor::block_on(dialog);
-    });
+enum UserEvent {
+    FileOpenSelected(Option<PathBuf>),
+    FileSaveSelected(Option<PathBuf>),
 }
 
 impl<'a> AppState<'a> {
+    fn open_file_dialog(&self) {
+        let task = AsyncFileDialog::new()
+            .set_parent(&self.window)
+            .set_title("Open DXF file")
+            .add_filter("Supported files", &["dxf", "die"])
+            .add_filter("DXF files", &["dxf"])
+            .add_filter("DIE files", &["die"])
+            .add_filter("All files", &["*"])
+            .pick_file();
+
+        let proxy = self.event_proxy.clone();
+
+        std::thread::spawn(move || {
+            let path = futures::executor::block_on(task).map(|file| file.path().to_owned());
+            let _ = proxy.send_event(UserEvent::FileOpenSelected(path));
+        });
+    }
+
+    fn save_file_dialog(&self) {
+        let task = AsyncFileDialog::new()
+            .set_parent(&self.window)
+            .set_title("Save DXF file")
+            .add_filter("DXF files", &["dxf"])
+            .add_filter("All files", &["*"])
+            .save_file();
+
+        let proxy = self.event_proxy.clone();
+
+        std::thread::spawn(move || {
+            let path = futures::executor::block_on(task).map(|file| file.path().to_owned());
+            let _ = proxy.send_event(UserEvent::FileSaveSelected(path));
+        });
+    }
+
+    fn error_message(&self, title: &str, message: &str) {
+        let dialog = AsyncMessageDialog::new()
+            .set_parent(&self.window)
+            .set_title(title)
+            .set_description(message)
+            .set_level(MessageLevel::Error)
+            .set_buttons(MessageButtons::Ok)
+            .show();
+
+        std::thread::spawn(move || {
+            futures::executor::block_on(dialog);
+        });
+    }
+
     fn open_file(&mut self, path: PathBuf, is_splash: bool) {
-        /*println!(
-            "name {}  path {}",
-            path.file_name().unwrap().display(),
-            std::path::absolute(&path).unwrap().parent().unwrap().display()
-        );*/
         if !is_splash {
             self.window
                 .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
@@ -79,7 +114,7 @@ impl<'a> AppState<'a> {
                 self.window.request_redraw();
             }
             Err(_) => {
-                error_message(&self.window, "File error", "Error opening DXF file");
+                self.error_message("File error", "Error opening DXF file");
             }
         }
     }
@@ -89,16 +124,11 @@ impl<'a> AppState<'a> {
         match command {
             GuiCommand::None => (),
             GuiCommand::Open => {
-                if let Some(file) = FileDialog::new()
-                    .set_title("Open DXF file")
-                    .add_filter("DXF files", &["dxf", "*"])
-                    .set_parent(&self.window)
-                    .pick_file()
-                {
-                    self.open_file(file, false);
-                }
+                self.open_file_dialog();
             }
-            GuiCommand::Save => (),
+            GuiCommand::Save => {
+                self.save_file_dialog();
+            }
             GuiCommand::ZoomIn => {
                 let PhysicalSize { width, height } = self.window.inner_size();
                 self.inker
@@ -133,9 +163,10 @@ impl<'a> AppState<'a> {
 struct App<'a> {
     context: Context<OwnedDisplayHandle>,
     state: Option<AppState<'a>>,
+    proxy: EventLoopProxy<UserEvent>,
 }
 
-impl<'a> ApplicationHandler for App<'a> {
+impl<'a> ApplicationHandler<UserEvent> for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
             let attributes = Window::default_attributes()
@@ -195,6 +226,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 drag: false,
                 gui,
                 show_errors: false,
+                event_proxy: self.proxy.clone(),
             });
 
             if let Some(state) = self.state.as_mut() {
@@ -205,6 +237,22 @@ impl<'a> ApplicationHandler for App<'a> {
                     state.open_file(PathBuf::from(SPLASH_FILENAME), true);
                 };
             }
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        let Some(app_state) = self.state.as_mut() else {
+            return;
+        };
+
+        match event {
+            UserEvent::FileOpenSelected(Some(path)) => {
+                app_state.open_file(path, false);
+            }
+            UserEvent::FileSaveSelected(Some(path)) => {
+                println!("Save file selected \"{}\"", path.display())
+            }
+            _ => (),
         }
     }
 
@@ -360,11 +408,17 @@ impl<'a> ApplicationHandler for App<'a> {
     }
 }
 
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
+fn main() -> anyhow::Result<()> {
+    let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
+    let proxy = event_loop.create_proxy();
 
-    let mut app = App { context, state: None };
-    event_loop.run_app(&mut app).unwrap();
+    let mut app = App {
+        context,
+        state: None,
+        proxy,
+    };
+    event_loop.run_app(&mut app)?;
+    Ok(())
 }
