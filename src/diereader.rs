@@ -5,6 +5,7 @@ use std::{
     path::Path,
 };
 
+use anyhow::bail;
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 use tiny_skia::{PathBuilder, Rect};
@@ -191,6 +192,16 @@ fn parse_lines(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
     let mut maxy = f32::MIN;
 
     file.next();
+
+    // skip
+    loop {
+        if let DieCommand::Sign(_, _) = file.command {
+            break;
+        } else {
+            file.next();
+        }
+    }
+
     for _ in 0..count {
         let DieCommand::Sign(p1, p2) = file.command else {
             break;
@@ -212,10 +223,15 @@ fn parse_lines(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
         file.next();
     }
 
+    // skip excess
+    while let DieCommand::Sign(_, _) = file.command {
+        file.next();
+    }
+
     Rect::from_ltrb(minx, miny, maxx, maxy).unwrap()
 }
 
-fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> Rect {
+fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> anyhow::Result<Rect> {
     if let DieCommand::NumOfPoints(is_outer, count) = file.command
         && is_outer == outer
     {
@@ -229,6 +245,15 @@ fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> Rect 
 
         file.next();
 
+        // skip
+        loop {
+            if let DieCommand::Point(_, _) = file.command {
+                break;
+            } else {
+                file.next();
+            }
+        }
+
         for _ in 0..count {
             if let DieCommand::Point(is_outer, point) = file.command
                 && is_outer == outer
@@ -241,14 +266,33 @@ fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> Rect 
                 maxy = maxy.max(-point.y);
                 file.next();
             } else {
-                break;
+                match file.command {
+                    DieCommand::NumOfArcs(_, _) => {
+                        bail!("Insufficient number of vertices")
+                    }
+                    _ => break,
+                }
             };
+        }
+
+        // skip excess
+        while let DieCommand::Point(_, _) = file.command {
+            file.next();
         }
 
         if let DieCommand::NumOfArcs(is_outer, count) = file.command
             && is_outer == outer
         {
             file.next();
+
+            loop {
+                if let DieCommand::Arc(_, _) = file.command {
+                    break;
+                } else {
+                    file.next();
+                }
+            }
+
             for _ in 0..count {
                 if let DieCommand::Arc(is_outer, arc) = file.command
                     && is_outer == outer
@@ -258,6 +302,11 @@ fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> Rect 
                 } else {
                     break;
                 };
+            }
+
+            // skip excess
+            while let DieCommand::Arc(_, _) = file.command {
+                file.next();
             }
         }
 
@@ -291,22 +340,31 @@ fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> Rect 
             }
         }
 
-        Rect::from_ltrb(minx, miny, maxx, maxy).unwrap()
+        Rect::from_ltrb(minx, miny, maxx, maxy).ok_or(anyhow::anyhow!("Wrong bounds"))
     } else {
-        Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap()
+        Ok(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap())
     }
 }
 
-fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
+fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> anyhow::Result<Rect> {
     let mut bounds: Option<Rect> = None;
 
     let DieCommand::NumOfCuts(count) = file.command else {
-        return Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap();
+        return Ok(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap());
     };
     file.next();
 
+    // skip
+    loop {
+        if let DieCommand::NumOfPoints(_, _) = file.command {
+            break;
+        } else {
+            file.next();
+        }
+    }
+
     for _ in 0..count {
-        let new_bounds = parse_contour(file, pb, false);
+        let new_bounds = parse_contour(file, pb, false)?;
         if let Some(bounds) = bounds.as_mut() {
             bounds.join(&new_bounds);
         } else {
@@ -314,7 +372,7 @@ fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
         }
     }
 
-    bounds.unwrap_or(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap())
+    Ok(bounds.unwrap_or(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap()))
 }
 
 pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
@@ -339,7 +397,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
                 }
             }
             DieCommand::NumOfPoints(true, _) => {
-                let new_bounds = parse_contour(&mut file, &mut main_pb, true);
+                let new_bounds = parse_contour(&mut file, &mut main_pb, true)?;
                 if let Some(total_bounds) = bounds.as_mut() {
                     total_bounds.join(&new_bounds);
                 } else {
@@ -347,7 +405,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
                 }
             }
             DieCommand::NumOfCuts(_) => {
-                let new_bounds = parse_cuts(&mut file, &mut cuts_pb);
+                let new_bounds = parse_cuts(&mut file, &mut cuts_pb)?;
                 if let Some(total_bounds) = bounds.as_mut() {
                     total_bounds.join(&new_bounds);
                 } else {
