@@ -166,6 +166,7 @@ fn arc_draw_by_points(center: Point2D, start: Point2D, end: Point2D, direction: 
     let radius = (center.dist2(start).sqrt() + center.dist2(end).sqrt()) / 2.0;
     if start.dist2(end) < EPSILON {
         pb.push_circle(center.x, -center.y, radius);
+        pb.move_to(end.x, -end.y);
     } else {
         let start_angle = f32::atan2(start.y - center.y, start.x - center.x);
         let end_angle = f32::atan2(end.y - center.y, end.x - center.x);
