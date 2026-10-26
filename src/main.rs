@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
 use softbuffer::{Context, Surface};
 use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
