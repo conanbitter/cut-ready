@@ -44,7 +44,7 @@ pub const LINEWIDTH_MAIN: f32 = 1.95;
 pub const LINEWIDTH_THICK: f32 = 2.95;
 pub const LINEWIDTH_OTHER: f32 = 0.95;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum LineType {
     Main,
     Cuts,
@@ -118,7 +118,7 @@ impl<'a> Default for Blueprint<'a> {
 fn get_line_type(color: i32) -> LineType {
     match color {
         0x007FFF | 0x0080FF | 0x0000FF => LineType::Main,
-        0x008181 | 0x009696 => LineType::Cuts,
+        0x008181 | 0x009696 | 0x006868 => LineType::Cuts,
         0x000000 => LineType::Marks,
         _ => LineType::Other,
     }
@@ -452,6 +452,8 @@ pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     let mut open_ends = vec![];
 
     for (color, path) in main_block.layers {
+        //println!("Color 0x{:06X}", color);
+
         let r = ((color >> 16) & 0xFF) as u8;
         let g = ((color >> 8) & 0xFF) as u8;
         let b = (color & 0xFF) as u8;

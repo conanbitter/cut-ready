@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::bail;
+use dxf::Drawing;
 use encoding_rs::WINDOWS_1252;
 use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 use tiny_skia::{PathBuilder, Rect};
@@ -22,11 +23,15 @@ const DEFAULT_MARKS_COLOR: i32 = 0x000000;
 
 const DEFAULT_MAIN_COLOR_INDEX: u8 = 150;
 const DEFAULT_CUTS_COLOR_INDEX: u8 = 136;
-const DEFAULT_MARKS_COLOR_INDEX: u8 = 0;
+const DEFAULT_MARKS_COLOR_INDEX: u8 = 7;
 
-pub const DXF_LINEWEIGHT_MAIN: i16 = 50;
-pub const DXF_LINEWEIGHT_THICK: i16 = 80;
+pub const DXF_LINEWEIGHT_MAIN: i16 = 60;
+pub const DXF_LINEWEIGHT_THICK: i16 = 100;
 pub const DXF_LINEWEIGHT_OTHER: i16 = 20;
+
+pub const DXF_LINEWIDTH_MAIN: f64 = 0.6;
+pub const DXF_LINEWIDTH_THICK: f64 = 1.0;
+pub const DXF_LINEWIDTH_OTHER: f64 = 0.2;
 
 #[derive(Debug, Clone, Copy)]
 struct DieArc {
@@ -470,9 +475,99 @@ fn set_line_type(entity: &mut dxf::entities::Entity, line_type: blueprint::LineT
     }
 }
 
+fn get_line_width(line_type: blueprint::LineType) -> f64 {
+    match line_type {
+        blueprint::LineType::Main => DXF_LINEWIDTH_MAIN,
+        blueprint::LineType::Cuts => DXF_LINEWIDTH_THICK,
+        _ => DXF_LINEWIDTH_OTHER,
+    }
+}
+
+struct ConvVertex {
+    point: Point2D,
+    bulge: f32,
+}
+
+fn conv_circle(drawing: &mut Drawing, center: Point2D, radius: f32, line_type: blueprint::LineType) {
+    let circle = dxf::entities::Circle::new(dxf::Point::new(center.x as f64, center.y as f64, 0.0), radius as f64);
+
+    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(circle));
+    set_line_type(&mut circle, line_type);
+
+    drawing.add_entity(circle);
+}
+
+fn conv_arc(
+    drawing: &mut Drawing,
+    center: Point2D,
+    radius: f32,
+    start_angle: f32,
+    end_angle: f32,
+    line_type: blueprint::LineType,
+) {
+    let arc = dxf::entities::Arc::new(
+        dxf::Point::new(center.x as f64, center.y as f64, 0.0),
+        radius as f64,
+        (start_angle as f64).to_degrees(),
+        (end_angle as f64).to_degrees(),
+    );
+
+    let mut arc = dxf::entities::Entity::new(dxf::entities::EntityType::Arc(arc));
+    set_line_type(&mut arc, line_type);
+
+    drawing.add_entity(arc);
+}
+
+fn conv_line(drawing: &mut Drawing, p1: Point2D, p2: Point2D, line_type: blueprint::LineType) {
+    let line = dxf::entities::Line::new(
+        dxf::Point::new(p1.x as f64, p1.y as f64, 0.0),
+        dxf::Point::new(p2.x as f64, p2.y as f64, 0.0),
+    );
+
+    let mut line = dxf::entities::Entity::new(dxf::entities::EntityType::Line(line));
+    set_line_type(&mut line, line_type);
+
+    drawing.add_entity(line);
+}
+
+fn conv_polyline(drawing: &mut Drawing, vertices: &[ConvVertex], line_type: blueprint::LineType) {
+    if vertices.len() < 2 {
+        return;
+    }
+
+    let mut vert_iter = vertices.iter();
+
+    let closed = if vertices[0].point.dist2(vertices.last().unwrap().point) < EPSILON {
+        vert_iter.next_back();
+        true
+    } else {
+        false
+    };
+
+    let segments: Vec<dxf::LwPolylineVertex> = vert_iter
+        .map(|vert| dxf::LwPolylineVertex {
+            x: vert.point.x as f64,
+            y: vert.point.y as f64,
+            bulge: vert.bulge as f64,
+            ..dxf::LwPolylineVertex::default()
+        })
+        .collect();
+
+    let polyline = dxf::entities::LwPolyline {
+        constant_width: get_line_width(line_type),
+        vertices: segments,
+        flags: if closed { 1 } else { 0 },
+        ..dxf::entities::LwPolyline::default()
+    };
+
+    let mut polyline = dxf::entities::Entity::new(dxf::entities::EntityType::LwPolyline(polyline));
+    set_line_type(&mut polyline, line_type);
+    drawing.add_entity(polyline);
+}
+
 pub fn convert_die() -> anyhow::Result<()> {
     let mut drawing = dxf::Drawing::new();
-    drawing.header.version = dxf::enums::AcadVersion::R2000;
+    drawing.header.version = dxf::enums::AcadVersion::R2004;
 
     let line_type_main = dxf::tables::LineType {
         name: "CR_MAIN".into(),
@@ -491,26 +586,44 @@ pub fn convert_die() -> anyhow::Result<()> {
     drawing.add_line_type(line_type_thick);
     drawing.add_line_type(line_type_thin);
 
-    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
-        dxf::Point::new(0.0, 0.0, 0.0),
-        10.0,
-    )));
-    set_line_type(&mut circle, blueprint::LineType::Main);
-    drawing.add_entity(circle);
+    conv_circle(&mut drawing, Point2D::new(0.0, 0.0), 10.0, blueprint::LineType::Main);
 
-    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
-        dxf::Point::new(0.0, 0.0, 0.0),
+    conv_arc(
+        &mut drawing,
+        Point2D::new(0.0, 0.0),
         5.0,
-    )));
-    set_line_type(&mut circle, blueprint::LineType::Cuts);
-    drawing.add_entity(circle);
-
-    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
-        dxf::Point::new(0.0, 0.0, 0.0),
+        0.0,
         2.0,
-    )));
-    set_line_type(&mut circle, blueprint::LineType::Marks);
-    drawing.add_entity(circle);
+        blueprint::LineType::Cuts,
+    );
+
+    conv_line(
+        &mut drawing,
+        Point2D::new(2.0, 0.0),
+        Point2D::new(10.0, 10.0),
+        blueprint::LineType::Marks,
+    );
+
+    let segments = vec![
+        ConvVertex {
+            point: Point2D::new(-7.0, -7.0),
+            bulge: -0.1,
+        },
+        ConvVertex {
+            point: Point2D::new(-7.0, 7.0),
+            bulge: 0.0,
+        },
+        ConvVertex {
+            point: Point2D::new(7.0, 7.0),
+            bulge: -2.0,
+        },
+        ConvVertex {
+            point: Point2D::new(-7.0, -7.0),
+            bulge: -2.0,
+        },
+    ];
+
+    conv_polyline(&mut drawing, &segments, blueprint::LineType::Main);
 
     drawing.save_file("tests/result.dxf")?;
 
