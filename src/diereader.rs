@@ -20,6 +20,14 @@ const DEFAULT_MAIN_COLOR: i32 = 0x007FFF;
 const DEFAULT_CUTS_COLOR: i32 = 0x008181;
 const DEFAULT_MARKS_COLOR: i32 = 0x000000;
 
+const DEFAULT_MAIN_COLOR_INDEX: u8 = 150;
+const DEFAULT_CUTS_COLOR_INDEX: u8 = 136;
+const DEFAULT_MARKS_COLOR_INDEX: u8 = 0;
+
+pub const DXF_LINEWEIGHT_MAIN: i16 = 50;
+pub const DXF_LINEWEIGHT_THICK: i16 = 80;
+pub const DXF_LINEWEIGHT_OTHER: i16 = 20;
+
 #[derive(Debug, Clone, Copy)]
 struct DieArc {
     start: usize,
@@ -434,4 +442,42 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         bounds: bounds.unwrap_or(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap()),
         errors: PointErrors::default(),
     })
+}
+
+pub fn convert_die() -> anyhow::Result<()> {
+    let mut drawing = dxf::Drawing::new();
+    drawing.header.version = dxf::enums::AcadVersion::R2000;
+
+    let line_name_main = String::from("CR_MAIN");
+
+    let line_type_main = dxf::tables::LineType {
+        name: line_name_main.clone(),
+        ..Default::default()
+    };
+    let line_type_thick = dxf::tables::LineType {
+        name: "CR_THICK".to_string(),
+        ..Default::default()
+    };
+    let line_type_thin = dxf::tables::LineType {
+        name: "CR_THIN".to_string(),
+        ..Default::default()
+    };
+
+    drawing.add_line_type(line_type_main);
+    drawing.add_line_type(line_type_thick);
+    drawing.add_line_type(line_type_thin);
+
+    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
+        dxf::Point::new(0.0, 0.0, 0.0),
+        10.0,
+    )));
+    circle.common.color_24_bit = DEFAULT_MAIN_COLOR;
+    circle.common.color = dxf::Color::from_index(DEFAULT_MAIN_COLOR_INDEX);
+    circle.common.lineweight_enum_value = DXF_LINEWEIGHT_MAIN;
+    circle.common.line_type_name = line_name_main.clone();
+    drawing.add_entity(circle);
+
+    drawing.save_file("tests/result.dxf")?;
+
+    Ok(())
 }

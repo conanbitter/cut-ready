@@ -14,7 +14,7 @@ use winit::{
 
 use crate::{
     blueprint::load_dxf,
-    diereader::load_die,
+    diereader::{convert_die, load_die},
     gui::{Gui, GuiCommand},
     inker::Inker,
 };
@@ -420,6 +420,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
+    convert_die()?;
+    return Ok(());
+
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
