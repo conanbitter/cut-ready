@@ -483,6 +483,7 @@ fn get_line_width(line_type: blueprint::LineType) -> f64 {
     }
 }
 
+#[derive(Clone, Copy)]
 struct ConvVertex {
     point: Point2D,
     bulge: f32,
@@ -532,8 +533,15 @@ fn conv_line(drawing: &mut Drawing, p1: Point2D, p2: Point2D, line_type: bluepri
 
 fn conv_polyline(drawing: &mut Drawing, vertices: &[ConvVertex], line_type: blueprint::LineType) {
     if vertices.len() < 2 {
+        //println!("Empty polyline");
+        return;
+    } else if vertices.len() == 2 {
+        //println!("Polyline is line");
+        conv_line(drawing, vertices[0].point, vertices[1].point, line_type);
         return;
     }
+
+    //println!("Proper polyline");
 
     let mut vert_iter = vertices.iter();
 
@@ -565,7 +573,274 @@ fn conv_polyline(drawing: &mut Drawing, vertices: &[ConvVertex], line_type: blue
     drawing.add_entity(polyline);
 }
 
-pub fn convert_die() -> anyhow::Result<()> {
+fn conv_parse_lines(file: &mut DieFile, drawing: &mut Drawing) {
+    let DieCommand::NumOfSign(count) = file.command else {
+        return;
+    };
+
+    let mut verts = vec![];
+    let mut last = Point2D::default();
+
+    file.next();
+
+    // skip
+    loop {
+        if let DieCommand::Sign(_, _) = file.command {
+            break;
+        } else {
+            file.next();
+        }
+    }
+
+    for _ in 0..count {
+        let DieCommand::Sign(p1, p2) = file.command else {
+            break;
+        };
+
+        if verts.is_empty() {
+            verts.push(ConvVertex { point: p1, bulge: 0.0 });
+            verts.push(ConvVertex { point: p2, bulge: 0.0 });
+            last = p2;
+        } else if last.dist2(p1) < EPSILON {
+            verts.push(ConvVertex { point: p2, bulge: 0.0 });
+            last = p2;
+        } else if last.dist2(p2) < EPSILON {
+            verts.push(ConvVertex { point: p1, bulge: 0.0 });
+            last = p1;
+        } else {
+            conv_polyline(drawing, &verts, blueprint::LineType::Marks);
+            verts.clear();
+            verts.push(ConvVertex { point: p1, bulge: 0.0 });
+            verts.push(ConvVertex { point: p2, bulge: 0.0 });
+            last = p2;
+        }
+
+        file.next();
+    }
+    conv_polyline(drawing, &verts, blueprint::LineType::Marks);
+
+    // skip excess
+    while let DieCommand::Sign(_, _) = file.command {
+        file.next();
+    }
+}
+
+fn conv_arc_by_points(
+    drawing: &mut Drawing,
+    center: Point2D,
+    start: Point2D,
+    end: Point2D,
+    direction: bool,
+    line_type: blueprint::LineType,
+) {
+    let radius = (center.dist2(start).sqrt() + center.dist2(end).sqrt()) / 2.0;
+    if start.dist2(end) < EPSILON {
+        conv_circle(drawing, center, radius, line_type);
+    } else {
+        let start_angle = f32::atan2(start.y - center.y, start.x - center.x);
+        let end_angle = f32::atan2(end.y - center.y, end.x - center.x);
+
+        let mut sweep_angle = end_angle - start_angle;
+        if direction && sweep_angle < 0.0 {
+            sweep_angle += TAU;
+        }
+        if !direction && sweep_angle > 0.0 {
+            sweep_angle -= TAU;
+        }
+        conv_arc(
+            drawing,
+            center,
+            radius,
+            start_angle,
+            start_angle + sweep_angle,
+            line_type,
+        );
+    }
+}
+
+fn conv_get_bulge(center: Point2D, start: Point2D, end: Point2D, direction: bool) -> f32 {
+    let start_angle = f32::atan2(start.y - center.y, start.x - center.x);
+    let end_angle = f32::atan2(end.y - center.y, end.x - center.x);
+
+    let mut sweep_angle = end_angle - start_angle;
+    if direction && sweep_angle < 0.0 {
+        sweep_angle += TAU;
+    };
+    if !direction && sweep_angle > 0.0 {
+        sweep_angle -= TAU;
+    };
+
+    (sweep_angle / 4.0).tan()
+}
+
+fn conv_parse_contour(file: &mut DieFile, drawing: &mut Drawing, outer: bool) -> anyhow::Result<()> {
+    if let DieCommand::NumOfPoints(is_outer, count) = file.command
+        && is_outer == outer
+    {
+        let line_type = if outer {
+            blueprint::LineType::Main
+        } else {
+            blueprint::LineType::Cuts
+        };
+
+        let mut points = vec![];
+        let mut arcs = vec![];
+
+        file.next();
+
+        // skip
+        loop {
+            if let DieCommand::Point(_, _) = file.command {
+                break;
+            } else {
+                file.next();
+            }
+        }
+
+        for _ in 0..count {
+            if let DieCommand::Point(is_outer, point) = file.command
+                && is_outer == outer
+            {
+                points.push(ConvVertex { point, bulge: 0.0 });
+                file.next();
+            } else {
+                match file.command {
+                    DieCommand::NumOfArcs(_, _) => {
+                        bail!("Insufficient number of vertices")
+                    }
+                    _ => break,
+                }
+            };
+        }
+
+        // skip excess
+        while let DieCommand::Point(_, _) = file.command {
+            file.next();
+        }
+
+        if let DieCommand::NumOfArcs(is_outer, count) = file.command
+            && is_outer == outer
+        {
+            file.next();
+
+            loop {
+                if let DieCommand::Arc(_, _) = file.command {
+                    break;
+                } else {
+                    file.next();
+                }
+            }
+
+            for _ in 0..count {
+                if let DieCommand::Arc(is_outer, arc) = file.command
+                    && is_outer == outer
+                {
+                    arcs.push(arc);
+                    file.next();
+                } else {
+                    break;
+                };
+            }
+
+            // skip excess
+            while let DieCommand::Arc(_, _) = file.command {
+                file.next();
+            }
+        }
+
+        if !points.is_empty() {
+            if arcs.is_empty() {
+                // No arcs
+                conv_polyline(drawing, &points, line_type);
+            } else if arcs.len() == 1
+                && ((arcs[0].start == 0 && arcs[0].end == points.len() - 1)
+                    || (arcs[0].end == 0 && arcs[0].start == points.len() - 1))
+            {
+                // Single arc
+                let single_arc = arcs[0];
+                conv_arc_by_points(
+                    drawing,
+                    single_arc.center,
+                    points[single_arc.start].point,
+                    points[single_arc.end].point,
+                    single_arc.direction,
+                    line_type,
+                );
+            } else {
+                // Mixed
+                arcs.sort_by_key(|a| a.start);
+                let mut mixed = vec![];
+                let mut cur_point = 0;
+                let mut cur_arc = 0;
+                while cur_point < points.len() && cur_arc < arcs.len() {
+                    let mut pt = points[cur_point];
+                    if cur_point == arcs[cur_arc].start {
+                        let arc = arcs[cur_arc];
+                        pt.bulge = conv_get_bulge(
+                            arc.center,
+                            points[arc.start].point,
+                            points[arc.end].point,
+                            arc.direction,
+                        );
+                        cur_point = arc.end;
+                        cur_arc += 1;
+                    } else {
+                        cur_point += 1;
+                    }
+                    mixed.push(pt);
+                }
+                if cur_point < points.len() {
+                    for pt in points.into_iter().skip(cur_point) {
+                        mixed.push(pt);
+                    }
+                }
+                conv_polyline(drawing, &mixed, line_type);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn conv_parse_cuts(file: &mut DieFile, drawing: &mut Drawing) -> anyhow::Result<()> {
+    let DieCommand::NumOfCuts(count) = file.command else {
+        return Ok(());
+    };
+    file.next();
+
+    // skip
+    loop {
+        if let DieCommand::NumOfPoints(_, _) = file.command {
+            break;
+        } else {
+            file.next();
+        }
+    }
+
+    for _ in 0..count {
+        conv_parse_contour(file, drawing, false)?;
+    }
+
+    Ok(())
+}
+
+pub fn conv_load_die(filename: impl AsRef<Path>, drawing: &mut Drawing) -> anyhow::Result<()> {
+    let mut file = DieFile::open(filename)?;
+
+    file.next();
+    loop {
+        match file.command {
+            DieCommand::EndOfFile => break,
+            DieCommand::NumOfSign(_) => conv_parse_lines(&mut file, drawing),
+            DieCommand::NumOfPoints(true, _) => conv_parse_contour(&mut file, drawing, true)?,
+            DieCommand::NumOfCuts(_) => conv_parse_cuts(&mut file, drawing)?,
+            _ => file.next(),
+        }
+    }
+
+    Ok(())
+}
+
+pub fn convert_die(die_file: impl AsRef<Path>, dxf_file: impl AsRef<Path>) -> anyhow::Result<()> {
     let mut drawing = dxf::Drawing::new();
     drawing.header.version = dxf::enums::AcadVersion::R2004;
 
@@ -586,46 +861,9 @@ pub fn convert_die() -> anyhow::Result<()> {
     drawing.add_line_type(line_type_thick);
     drawing.add_line_type(line_type_thin);
 
-    conv_circle(&mut drawing, Point2D::new(0.0, 0.0), 10.0, blueprint::LineType::Main);
+    conv_load_die(die_file, &mut drawing)?;
 
-    conv_arc(
-        &mut drawing,
-        Point2D::new(0.0, 0.0),
-        5.0,
-        0.0,
-        2.0,
-        blueprint::LineType::Cuts,
-    );
-
-    conv_line(
-        &mut drawing,
-        Point2D::new(2.0, 0.0),
-        Point2D::new(10.0, 10.0),
-        blueprint::LineType::Marks,
-    );
-
-    let segments = vec![
-        ConvVertex {
-            point: Point2D::new(-7.0, -7.0),
-            bulge: -0.1,
-        },
-        ConvVertex {
-            point: Point2D::new(-7.0, 7.0),
-            bulge: 0.0,
-        },
-        ConvVertex {
-            point: Point2D::new(7.0, 7.0),
-            bulge: -2.0,
-        },
-        ConvVertex {
-            point: Point2D::new(-7.0, -7.0),
-            bulge: -2.0,
-        },
-    ];
-
-    conv_polyline(&mut drawing, &segments, blueprint::LineType::Main);
-
-    drawing.save_file("tests/result.dxf")?;
+    drawing.save_file(dxf_file)?;
 
     Ok(())
 }

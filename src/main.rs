@@ -42,6 +42,7 @@ struct AppState<'a> {
     drag: bool,
     show_errors: bool,
     event_proxy: EventLoopProxy<UserEvent>,
+    current_filename: Option<PathBuf>,
 }
 
 enum UserEvent {
@@ -68,12 +69,13 @@ impl<'a> AppState<'a> {
         });
     }
 
-    fn save_file_dialog(&self) {
+    fn save_file_dialog(&self, filename: String) {
         let task = AsyncFileDialog::new()
             .set_parent(&self.window)
             .set_title("Save DXF file")
             .add_filter("DXF files", &["dxf"])
             .add_filter("All files", &["*"])
+            .set_file_name(filename)
             .save_file();
 
         let proxy = self.event_proxy.clone();
@@ -84,12 +86,12 @@ impl<'a> AppState<'a> {
         });
     }
 
-    fn error_message(&self, title: &str, message: &str) {
+    fn message_box(&self, title: &str, message: &str, message_type: MessageLevel) {
         let dialog = AsyncMessageDialog::new()
             .set_parent(&self.window)
             .set_title(title)
             .set_description(message)
-            .set_level(MessageLevel::Error)
+            .set_level(message_type)
             .set_buttons(MessageButtons::Ok)
             .show();
 
@@ -105,9 +107,13 @@ impl<'a> AppState<'a> {
         }
 
         let readed = if path.extension() == Some(OsStr::new("die")) {
-            load_die(path)
+            if !is_splash {
+                self.gui.enable_saving();
+            }
+            load_die(path.clone())
         } else {
-            load_dxf(path)
+            self.gui.disable_saving();
+            load_dxf(path.clone())
         };
         //println!("{}", path.extension().unwrap().display());
         match readed {
@@ -122,10 +128,16 @@ impl<'a> AppState<'a> {
                 self.inker.current_blueprint = blueprint;
                 self.inker.show_all();
 
+                self.current_filename = Some(path);
+
                 self.window.request_redraw();
             }
             Err(err) => {
-                self.error_message("File error", format!("Error opening file\n{}", err).as_str());
+                self.message_box(
+                    "File error",
+                    format!("Error opening file\n{}", err).as_str(),
+                    MessageLevel::Error,
+                );
             }
         }
     }
@@ -138,7 +150,13 @@ impl<'a> AppState<'a> {
                 self.open_file_dialog();
             }
             GuiCommand::Save => {
-                self.save_file_dialog();
+                if let Some(filename) = self.current_filename.as_ref() {
+                    let new_filename = match filename.with_extension("dxf").file_name() {
+                        Some(name) => name.to_string_lossy().into_owned(),
+                        None => String::default(),
+                    };
+                    self.save_file_dialog(new_filename);
+                }
             }
             GuiCommand::ZoomIn => {
                 let PhysicalSize { width, height } = self.window.inner_size();
@@ -238,6 +256,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 gui,
                 show_errors: false,
                 event_proxy: self.proxy.clone(),
+                current_filename: None,
             });
 
             if let Some(state) = self.state.as_mut() {
@@ -261,7 +280,16 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 app_state.open_file(path, false);
             }
             UserEvent::FileSaveSelected(Some(path)) => {
-                println!("Save file selected \"{}\"", path.display())
+                if let Some(die_filename) = app_state.current_filename.as_ref() {
+                    match convert_die(die_filename, path) {
+                        Ok(_) => app_state.message_box("Success", "File successfully converted!", MessageLevel::Info),
+                        Err(err) => app_state.message_box(
+                            "Convert error",
+                            format!("Error converting file\n{}", err).as_str(),
+                            MessageLevel::Error,
+                        ),
+                    }
+                }
             }
             _ => (),
         }
@@ -420,9 +448,6 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
-    convert_die()?;
-    return Ok(());
-
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();

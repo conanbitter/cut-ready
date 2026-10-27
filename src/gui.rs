@@ -350,4 +350,12 @@ impl Gui {
 
         (total_res, res_command)
     }
+
+    pub fn enable_saving(&mut self) {
+        self.buttons[1].enable();
+    }
+
+    pub fn disable_saving(&mut self) {
+        self.buttons[1].disable();
+    }
 }
