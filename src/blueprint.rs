@@ -75,6 +75,8 @@ pub struct BlueprintLayer<'a> {
     pub color: tiny_skia::Paint<'a>,
     pub line_width: f32,
     pub order: u32,
+    pub hint_color: i32,
+    pub hint_type: LineType,
 }
 pub struct Blueprint<'a> {
     pub layers: Vec<BlueprintLayer<'a>>,
@@ -488,6 +490,8 @@ pub fn parse_dxf<'a>(drawing: Drawing) -> anyhow::Result<Blueprint<'a>> {
             color: paint,
             line_width,
             order,
+            hint_color: color,
+            hint_type: line_type,
         });
 
         if let Some(some_bounds) = bounds.as_mut() {

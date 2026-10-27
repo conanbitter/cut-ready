@@ -2,6 +2,7 @@
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
 use softbuffer::{Context, Surface};
+use std::fmt::Write;
 use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
 use winit::{
     application::ApplicationHandler,
@@ -189,6 +190,22 @@ impl<'a> AppState<'a> {
                 self.inker.camera.move_to(point);
             }
         }
+    }
+
+    fn color_hint(&self) {
+        let mut buffer = String::from("Line colors:\n\n");
+
+        for layer in &self.inker.current_blueprint.layers {
+            let layer_type = match layer.hint_type {
+                blueprint::LineType::Main => "main",
+                blueprint::LineType::Cuts => "cuts",
+                blueprint::LineType::Marks => "marks",
+                blueprint::LineType::Other => "other",
+            };
+            let _ = writeln!(&mut buffer, "{0:06X}   {0:08}   {1}", layer.hint_color, layer_type);
+        }
+
+        self.message_box("Colors", &buffer, MessageLevel::Info);
     }
 }
 
@@ -421,6 +438,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         KeyCode::Minus => {
                             app_state.command(GuiCommand::ZoomOut);
                             app_state.window.request_redraw();
+                        }
+                        KeyCode::KeyC => {
+                            app_state.color_hint();
                         }
                         _ => (),
                     }

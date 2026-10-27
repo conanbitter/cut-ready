@@ -159,7 +159,12 @@ impl DieFile {
     }
 }
 
-pub fn new_layer<'a>(path: tiny_skia::Path, color: i32, width: f32) -> BlueprintLayer<'a> {
+pub fn new_layer<'a>(
+    path: tiny_skia::Path,
+    color: i32,
+    width: f32,
+    line_type: blueprint::LineType,
+) -> BlueprintLayer<'a> {
     let r = ((color >> 16) & 0xFF) as u8;
     let g = ((color >> 8) & 0xFF) as u8;
     let b = (color & 0xFF) as u8;
@@ -172,6 +177,8 @@ pub fn new_layer<'a>(path: tiny_skia::Path, color: i32, width: f32) -> Blueprint
         color: paint,
         line_width: width,
         order: 0,
+        hint_color: color,
+        hint_type: line_type,
     }
 }
 
@@ -433,13 +440,28 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     let mut layers = vec![];
 
     if let Some(path) = marks_pb.finish() {
-        layers.push(new_layer(path, DEFAULT_MARKS_COLOR, LINEWIDTH_OTHER));
+        layers.push(new_layer(
+            path,
+            DEFAULT_MARKS_COLOR,
+            LINEWIDTH_OTHER,
+            blueprint::LineType::Marks,
+        ));
     }
     if let Some(path) = cuts_pb.finish() {
-        layers.push(new_layer(path, DEFAULT_CUTS_COLOR, LINEWIDTH_THICK));
+        layers.push(new_layer(
+            path,
+            DEFAULT_CUTS_COLOR,
+            LINEWIDTH_THICK,
+            blueprint::LineType::Cuts,
+        ));
     }
     if let Some(path) = main_pb.finish() {
-        layers.push(new_layer(path, DEFAULT_MAIN_COLOR, LINEWIDTH_MAIN));
+        layers.push(new_layer(
+            path,
+            DEFAULT_MAIN_COLOR,
+            LINEWIDTH_MAIN,
+            blueprint::LineType::Main,
+        ));
     }
 
     Ok(Blueprint {
