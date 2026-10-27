@@ -117,9 +117,9 @@ impl<'a> Default for Blueprint<'a> {
 
 fn get_line_type(color: i32) -> LineType {
     match color {
-        32767 | 33023 => LineType::Main,
-        33153 | 38550 => LineType::Cuts,
-        0 => LineType::Marks,
+        0x007FFF | 0x0080FF | 0x0000FF => LineType::Main,
+        0x008181 | 0x009696 => LineType::Cuts,
+        0x000000 => LineType::Marks,
         _ => LineType::Other,
     }
 }
