@@ -11,7 +11,7 @@ use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 use tiny_skia::{PathBuilder, Rect};
 
 use crate::{
-    blueprint::{Blueprint, BlueprintLayer, LINEWIDTH_MAIN, LINEWIDTH_OTHER, LINEWIDTH_THICK, arc_draw},
+    blueprint::{self, Blueprint, BlueprintLayer, LINEWIDTH_MAIN, LINEWIDTH_OTHER, LINEWIDTH_THICK, arc_draw},
     geometry::{EPSILON, Point2D},
     pointerrors::PointErrors,
 };
@@ -444,22 +444,46 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     })
 }
 
+// DIE -> DXF CONVERSION
+
+fn set_line_type(entity: &mut dxf::entities::Entity, line_type: blueprint::LineType) {
+    match line_type {
+        blueprint::LineType::Main => {
+            entity.common.color_24_bit = DEFAULT_MAIN_COLOR;
+            entity.common.color = dxf::Color::from_index(DEFAULT_MAIN_COLOR_INDEX);
+            entity.common.lineweight_enum_value = DXF_LINEWEIGHT_MAIN;
+            entity.common.line_type_name = "CR_MAIN".into();
+        }
+        blueprint::LineType::Cuts => {
+            entity.common.color_24_bit = DEFAULT_CUTS_COLOR;
+            entity.common.color = dxf::Color::from_index(DEFAULT_CUTS_COLOR_INDEX);
+            entity.common.lineweight_enum_value = DXF_LINEWEIGHT_THICK;
+            entity.common.line_type_name = "CR_THICK".into();
+        }
+        blueprint::LineType::Marks => {
+            entity.common.color_24_bit = DEFAULT_MARKS_COLOR;
+            entity.common.color = dxf::Color::from_index(DEFAULT_MARKS_COLOR_INDEX);
+            entity.common.lineweight_enum_value = DXF_LINEWEIGHT_OTHER;
+            entity.common.line_type_name = "CR_THIN".into();
+        }
+        _ => (),
+    }
+}
+
 pub fn convert_die() -> anyhow::Result<()> {
     let mut drawing = dxf::Drawing::new();
     drawing.header.version = dxf::enums::AcadVersion::R2000;
 
-    let line_name_main = String::from("CR_MAIN");
-
     let line_type_main = dxf::tables::LineType {
-        name: line_name_main.clone(),
+        name: "CR_MAIN".into(),
         ..Default::default()
     };
     let line_type_thick = dxf::tables::LineType {
-        name: "CR_THICK".to_string(),
+        name: "CR_THICK".into(),
         ..Default::default()
     };
     let line_type_thin = dxf::tables::LineType {
-        name: "CR_THIN".to_string(),
+        name: "CR_THIN".into(),
         ..Default::default()
     };
 
@@ -471,10 +495,21 @@ pub fn convert_die() -> anyhow::Result<()> {
         dxf::Point::new(0.0, 0.0, 0.0),
         10.0,
     )));
-    circle.common.color_24_bit = DEFAULT_MAIN_COLOR;
-    circle.common.color = dxf::Color::from_index(DEFAULT_MAIN_COLOR_INDEX);
-    circle.common.lineweight_enum_value = DXF_LINEWEIGHT_MAIN;
-    circle.common.line_type_name = line_name_main.clone();
+    set_line_type(&mut circle, blueprint::LineType::Main);
+    drawing.add_entity(circle);
+
+    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
+        dxf::Point::new(0.0, 0.0, 0.0),
+        5.0,
+    )));
+    set_line_type(&mut circle, blueprint::LineType::Cuts);
+    drawing.add_entity(circle);
+
+    let mut circle = dxf::entities::Entity::new(dxf::entities::EntityType::Circle(dxf::entities::Circle::new(
+        dxf::Point::new(0.0, 0.0, 0.0),
+        2.0,
+    )));
+    set_line_type(&mut circle, blueprint::LineType::Marks);
     drawing.add_entity(circle);
 
     drawing.save_file("tests/result.dxf")?;

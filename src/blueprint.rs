@@ -45,7 +45,7 @@ pub const LINEWIDTH_THICK: f32 = 2.95;
 pub const LINEWIDTH_OTHER: f32 = 0.95;
 
 #[derive(Debug)]
-enum LineType {
+pub enum LineType {
     Main,
     Cuts,
     Marks,
