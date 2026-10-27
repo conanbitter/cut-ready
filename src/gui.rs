@@ -364,21 +364,29 @@ impl Gui {
         }
     }
 
-    pub fn hide_errors(&mut self, permanent: bool) {
+    pub fn hide_errors(&mut self, permanent: bool, x: i32, y: i32) {
         self.buttons[5].visible = false;
         self.buttons[6].visible = true;
         if permanent {
             self.buttons[6].state = ButtonState::Disabled;
         } else {
-            self.buttons[6].state = ButtonState::Hovered;
+            self.buttons[6].state = if self.buttons[6].mouse_inbound(x, y) {
+                ButtonState::Hovered
+            } else {
+                ButtonState::Normal
+            }
         }
         self.buttons[7].disable();
         self.buttons[8].disable();
     }
 
-    pub fn show_errors(&mut self, permanent: bool) {
+    pub fn show_errors(&mut self, permanent: bool, x: i32, y: i32) {
         self.buttons[5].visible = true;
-        self.buttons[5].state = ButtonState::Hovered;
+        self.buttons[5].state = if self.buttons[5].mouse_inbound(x, y) {
+            ButtonState::Hovered
+        } else {
+            ButtonState::Normal
+        };
         self.buttons[6].visible = false;
         if permanent {
             self.buttons[6].state = ButtonState::Normal;
@@ -416,8 +424,8 @@ impl Gui {
         }
 
         match res_command {
-            GuiCommand::HideErrors => self.hide_errors(false),
-            GuiCommand::ShowErrors => self.show_errors(false),
+            GuiCommand::HideErrors => self.hide_errors(false, x, y),
+            GuiCommand::ShowErrors => self.show_errors(false, x, y),
             _ => (),
         }
 
@@ -430,5 +438,19 @@ impl Gui {
 
     pub fn disable_saving(&mut self) {
         self.buttons[1].disable();
+    }
+
+    pub fn toggle_errors(&mut self, x: i32, y: i32) -> bool {
+        if let ButtonState::Disabled = self.buttons[6].state {
+            return false;
+        }
+
+        if self.buttons[6].visible {
+            self.show_errors(false, x, y);
+            true
+        } else {
+            self.hide_errors(false, x, y);
+            false
+        }
     }
 }

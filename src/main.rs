@@ -45,6 +45,7 @@ struct AppState<'a> {
     show_errors: bool,
     event_proxy: EventLoopProxy<UserEvent>,
     current_filename: Option<PathBuf>,
+    ctrl_pressed: bool,
 }
 
 enum UserEvent {
@@ -108,11 +109,14 @@ impl<'a> AppState<'a> {
                 .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
         }
 
+        let mut can_save = false;
+
         let readed = if is_splash {
             decode_dxf(SPLASH_DATA)
         } else if path.extension() == Some(OsStr::new("die")) {
             if !is_splash {
                 self.gui.enable_saving();
+                can_save = true;
             }
             load_die(path.clone())
         } else {
@@ -123,16 +127,18 @@ impl<'a> AppState<'a> {
         match readed {
             Ok(blueprint) => {
                 if blueprint.errors.path.is_none() {
-                    self.gui.hide_errors(true);
+                    self.gui.hide_errors(true, self.mouse_x as i32, self.mouse_y as i32);
                     self.show_errors = false;
                 } else {
-                    self.gui.show_errors(true);
+                    self.gui.show_errors(true, self.mouse_x as i32, self.mouse_y as i32);
                     self.show_errors = true;
                 }
                 self.inker.current_blueprint = blueprint;
                 self.inker.show_all();
 
-                self.current_filename = Some(path);
+                if can_save {
+                    self.current_filename = Some(path.clone());
+                }
 
                 self.window.request_redraw();
             }
@@ -278,6 +284,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 show_errors: false,
                 event_proxy: self.proxy.clone(),
                 current_filename: None,
+                ctrl_pressed: false,
             });
 
             if let Some(state) = self.state.as_mut() {
@@ -419,6 +426,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     && let PhysicalKey::Code(code) = event.physical_key
                 {
                     match code {
+                        KeyCode::ControlLeft | KeyCode::ControlRight => app_state.ctrl_pressed = true,
                         KeyCode::ArrowRight => {
                             if app_state.show_errors {
                                 app_state.command(GuiCommand::NextError);
@@ -439,9 +447,32 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             app_state.command(GuiCommand::ZoomOut);
                             app_state.window.request_redraw();
                         }
-                        KeyCode::KeyC => {
+                        KeyCode::KeyC if app_state.ctrl_pressed => {
                             app_state.color_hint();
                         }
+                        KeyCode::KeyA if app_state.ctrl_pressed => {
+                            app_state.command(GuiCommand::ShowAll);
+                            app_state.window.request_redraw();
+                        }
+                        KeyCode::KeyO if app_state.ctrl_pressed => {
+                            app_state.command(GuiCommand::Open);
+                        }
+                        KeyCode::KeyS if app_state.ctrl_pressed && app_state.current_filename.is_some() => {
+                            app_state.command(GuiCommand::Save);
+                        }
+                        KeyCode::KeyE if app_state.ctrl_pressed => {
+                            app_state.show_errors = app_state
+                                .gui
+                                .toggle_errors(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                            app_state.window.request_redraw();
+                        }
+                        _ => (),
+                    }
+                } else if !event.state.is_pressed()
+                    && let PhysicalKey::Code(code) = event.physical_key
+                {
+                    match code {
+                        KeyCode::ControlLeft | KeyCode::ControlRight => app_state.ctrl_pressed = false,
                         _ => (),
                     }
                 }
