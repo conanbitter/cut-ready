@@ -18,6 +18,76 @@ pub const GUI_TRANSFORM: Transform = Transform {
 const BUTTON_SPACING: i32 = 2;
 const BUTTON_WIDE_SPACING: i32 = 10;
 
+struct ButtonImages {
+    normal: &'static [u8],
+    hovered: &'static [u8],
+    pressed: &'static [u8],
+    disabled: Option<&'static [u8]>,
+}
+
+const BTNIMG_OPEN: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/open_normal.png"),
+    hovered: include_bytes!("../assets/open_hovered.png"),
+    pressed: include_bytes!("../assets/open_pressed.png"),
+    disabled: None,
+};
+
+const BTNIMG_SAVE: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/save_normal.png"),
+    hovered: include_bytes!("../assets/save_hovered.png"),
+    pressed: include_bytes!("../assets/save_pressed.png"),
+    disabled: Some(include_bytes!("../assets/save_disabled.png")),
+};
+
+const BTNIMG_ZOOMIN: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/zoomin_normal.png"),
+    hovered: include_bytes!("../assets/zoomin_hovered.png"),
+    pressed: include_bytes!("../assets/zoomin_pressed.png"),
+    disabled: None,
+};
+
+const BTNIMG_ZOOMOUT: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/zoomout_normal.png"),
+    hovered: include_bytes!("../assets/zoomout_hovered.png"),
+    pressed: include_bytes!("../assets/zoomout_pressed.png"),
+    disabled: None,
+};
+
+const BTNIMG_SHOWALL: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/showall_normal.png"),
+    hovered: include_bytes!("../assets/showall_hovered.png"),
+    pressed: include_bytes!("../assets/showall_pressed.png"),
+    disabled: None,
+};
+
+const BTNIMG_SHOWN: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/shown_normal.png"),
+    hovered: include_bytes!("../assets/shown_hovered.png"),
+    pressed: include_bytes!("../assets/shown_pressed.png"),
+    disabled: None,
+};
+
+const BTNIMG_HIDDEN: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/hidden_normal.png"),
+    hovered: include_bytes!("../assets/hidden_hovered.png"),
+    pressed: include_bytes!("../assets/hidden_pressed.png"),
+    disabled: Some(include_bytes!("../assets/hidden_disabled.png")),
+};
+
+const BTNIMG_NEXT: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/next_normal.png"),
+    hovered: include_bytes!("../assets/next_hovered.png"),
+    pressed: include_bytes!("../assets/next_pressed.png"),
+    disabled: Some(include_bytes!("../assets/next_disabled.png")),
+};
+
+const BTNIMG_PREV: ButtonImages = ButtonImages {
+    normal: include_bytes!("../assets/prev_normal.png"),
+    hovered: include_bytes!("../assets/prev_hovered.png"),
+    pressed: include_bytes!("../assets/prev_pressed.png"),
+    disabled: Some(include_bytes!("../assets/prev_disabled.png")),
+};
+
 #[derive(Copy, Clone)]
 enum ButtonState {
     Normal,
@@ -47,11 +117,14 @@ pub struct GuiInteractionResult {
 }
 
 impl Button {
-    fn new(x: i32, y: i32, name: &str, command: GuiCommand, visible: bool) -> Button {
-        let image_normal = Pixmap::load_png(format!("WIP/{}_normal.png", name)).unwrap();
-        let image_hovered = Pixmap::load_png(format!("WIP/{}_hovered.png", name)).unwrap();
-        let image_pressed = Pixmap::load_png(format!("WIP/{}_pressed.png", name)).unwrap();
-        let image_disabled = Pixmap::load_png(format!("WIP/{}_disabled.png", name)).ok();
+    fn new(x: i32, y: i32, images: &ButtonImages, command: GuiCommand, visible: bool) -> Button {
+        let image_normal = Pixmap::decode_png(images.normal).unwrap();
+        let image_hovered = Pixmap::decode_png(images.hovered).unwrap();
+        let image_pressed = Pixmap::decode_png(images.pressed).unwrap();
+        let image_disabled = match images.disabled {
+            Some(image) => Pixmap::decode_png(image).ok(),
+            None => None,
+        };
         let width = image_normal.width() as i32;
         let height = image_normal.height() as i32;
         Button {
@@ -231,41 +304,41 @@ impl Gui {
         let mut curx = x;
         let mut height = 0;
 
-        let btn_open = Button::new(curx, y, "open", GuiCommand::Open, true);
+        let btn_open = Button::new(curx, y, &BTNIMG_OPEN, GuiCommand::Open, true);
         curx += btn_open.width + BUTTON_SPACING;
         height = height.max(btn_open.height);
 
-        let mut btn_save = Button::new(curx, y, "save", GuiCommand::Save, true);
+        let mut btn_save = Button::new(curx, y, &BTNIMG_SAVE, GuiCommand::Save, true);
         curx += btn_save.width + BUTTON_WIDE_SPACING;
         btn_save.disable();
         height = height.max(btn_save.height);
 
-        let btn_zoomin = Button::new(curx, y, "zoomin", GuiCommand::ZoomIn, true);
+        let btn_zoomin = Button::new(curx, y, &BTNIMG_ZOOMIN, GuiCommand::ZoomIn, true);
         curx += btn_zoomin.width + BUTTON_SPACING;
         height = height.max(btn_zoomin.height);
 
-        let btn_zoomout = Button::new(curx, y, "zoomout", GuiCommand::ZoomOut, true);
+        let btn_zoomout = Button::new(curx, y, &BTNIMG_ZOOMOUT, GuiCommand::ZoomOut, true);
         curx += btn_zoomout.width + BUTTON_SPACING;
         height = height.max(btn_zoomout.height);
 
-        let btn_showall = Button::new(curx, y, "showall", GuiCommand::ShowAll, true);
+        let btn_showall = Button::new(curx, y, &BTNIMG_SHOWALL, GuiCommand::ShowAll, true);
         curx += btn_showall.width + BUTTON_WIDE_SPACING;
         height = height.max(btn_showall.height);
 
-        let btn_shown = Button::new(curx, y, "shown", GuiCommand::HideErrors, false);
+        let btn_shown = Button::new(curx, y, &BTNIMG_SHOWN, GuiCommand::HideErrors, false);
         height = height.max(btn_shown.height);
 
-        let mut btn_hidden = Button::new(curx, y, "hidden", GuiCommand::ShowErrors, true);
+        let mut btn_hidden = Button::new(curx, y, &BTNIMG_HIDDEN, GuiCommand::ShowErrors, true);
         curx += btn_shown.width + BUTTON_SPACING;
         btn_hidden.disable();
         height = height.max(btn_hidden.height);
 
-        let mut btn_prev = Button::new(curx, y, "prev", GuiCommand::PrevError, true);
+        let mut btn_prev = Button::new(curx, y, &BTNIMG_PREV, GuiCommand::PrevError, true);
         curx += btn_prev.width + BUTTON_SPACING;
         btn_prev.disable();
         height = height.max(btn_prev.height);
 
-        let mut btn_next = Button::new(curx, y, "next", GuiCommand::NextError, true);
+        let mut btn_next = Button::new(curx, y, &BTNIMG_NEXT, GuiCommand::NextError, true);
         height = height.max(btn_next.height);
         btn_next.disable();
 

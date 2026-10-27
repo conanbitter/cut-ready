@@ -2,7 +2,7 @@ use dxf::{
     Drawing,
     entities::{Entity, EntityType},
 };
-use std::{collections::HashMap, f64::consts::TAU, path::Path, vec};
+use std::{collections::HashMap, f64::consts::TAU, io::Cursor, path::Path, vec};
 use tiny_skia::{PathBuilder, Rect, Transform};
 
 use crate::{
@@ -428,7 +428,16 @@ where
 
 pub fn load_dxf<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
     let drawing = Drawing::load_file(filename)?;
+    parse_dxf(drawing)
+}
 
+pub fn decode_dxf<'a>(data: &[u8]) -> anyhow::Result<Blueprint<'a>> {
+    let mut cursor = Cursor::new(data);
+    let drawing = Drawing::load(&mut cursor)?;
+    parse_dxf(drawing)
+}
+
+pub fn parse_dxf<'a>(drawing: Drawing) -> anyhow::Result<Blueprint<'a>> {
     let layer_colors: HashMap<String, i32> = drawing
         .layers()
         .map(|l| (l.name.clone(), DEFAULT_COLORS[l.color.index().unwrap() as usize]))

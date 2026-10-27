@@ -13,7 +13,7 @@ use winit::{
 };
 
 use crate::{
-    blueprint::load_dxf,
+    blueprint::{decode_dxf, load_dxf},
     diereader::{convert_die, load_die},
     gui::{Gui, GuiCommand},
     inker::Inker,
@@ -28,7 +28,7 @@ mod gui;
 mod inker;
 mod pointerrors;
 
-const SPLASH_FILENAME: &str = "tests/test1.die"; //"splash.dxf";
+const SPLASH_DATA: &[u8] = include_bytes!("../splash.dxf");
 
 struct AppState<'a> {
     window: Rc<Window>,
@@ -106,7 +106,9 @@ impl<'a> AppState<'a> {
                 .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
         }
 
-        let readed = if path.extension() == Some(OsStr::new("die")) {
+        let readed = if is_splash {
+            decode_dxf(SPLASH_DATA)
+        } else if path.extension() == Some(OsStr::new("die")) {
             if !is_splash {
                 self.gui.enable_saving();
             }
@@ -264,7 +266,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 if args.len() > 1 {
                     state.open_file(PathBuf::from(args[1].clone()), false);
                 } else {
-                    state.open_file(PathBuf::from(SPLASH_FILENAME), true);
+                    state.open_file(PathBuf::default(), true);
                 };
             }
         }
