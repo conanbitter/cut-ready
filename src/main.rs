@@ -9,7 +9,8 @@ use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy, OwnedDisplayHandle},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Window, WindowId},
+    platform::windows::IconExtWindows,
+    window::{Icon, Window, WindowId},
 };
 
 use crate::{
@@ -28,7 +29,7 @@ mod gui;
 mod inker;
 mod pointerrors;
 
-const SPLASH_DATA: &[u8] = include_bytes!("../splash.dxf");
+const SPLASH_DATA: &[u8] = include_bytes!("../assets/splash.dxf");
 
 struct AppState<'a> {
     window: Rc<Window>,
@@ -202,6 +203,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
         if self.state.is_none() {
             let attributes = Window::default_attributes()
                 .with_title("Cut Ready")
+                .with_window_icon(Icon::from_resource(1, None).ok())
                 .with_inner_size(PhysicalSize::new(1280, 720))
                 .with_visible(false);
 

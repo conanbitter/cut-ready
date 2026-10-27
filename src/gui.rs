@@ -26,66 +26,66 @@ struct ButtonImages {
 }
 
 const BTNIMG_OPEN: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/open_normal.png"),
-    hovered: include_bytes!("../assets/open_hovered.png"),
-    pressed: include_bytes!("../assets/open_pressed.png"),
+    normal: include_bytes!("../assets/buttons/open_normal.png"),
+    hovered: include_bytes!("../assets/buttons/open_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/open_pressed.png"),
     disabled: None,
 };
 
 const BTNIMG_SAVE: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/save_normal.png"),
-    hovered: include_bytes!("../assets/save_hovered.png"),
-    pressed: include_bytes!("../assets/save_pressed.png"),
-    disabled: Some(include_bytes!("../assets/save_disabled.png")),
+    normal: include_bytes!("../assets/buttons/save_normal.png"),
+    hovered: include_bytes!("../assets/buttons/save_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/save_pressed.png"),
+    disabled: Some(include_bytes!("../assets/buttons/save_disabled.png")),
 };
 
 const BTNIMG_ZOOMIN: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/zoomin_normal.png"),
-    hovered: include_bytes!("../assets/zoomin_hovered.png"),
-    pressed: include_bytes!("../assets/zoomin_pressed.png"),
+    normal: include_bytes!("../assets/buttons/zoomin_normal.png"),
+    hovered: include_bytes!("../assets/buttons/zoomin_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/zoomin_pressed.png"),
     disabled: None,
 };
 
 const BTNIMG_ZOOMOUT: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/zoomout_normal.png"),
-    hovered: include_bytes!("../assets/zoomout_hovered.png"),
-    pressed: include_bytes!("../assets/zoomout_pressed.png"),
+    normal: include_bytes!("../assets/buttons/zoomout_normal.png"),
+    hovered: include_bytes!("../assets/buttons/zoomout_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/zoomout_pressed.png"),
     disabled: None,
 };
 
 const BTNIMG_SHOWALL: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/showall_normal.png"),
-    hovered: include_bytes!("../assets/showall_hovered.png"),
-    pressed: include_bytes!("../assets/showall_pressed.png"),
+    normal: include_bytes!("../assets/buttons/showall_normal.png"),
+    hovered: include_bytes!("../assets/buttons/showall_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/showall_pressed.png"),
     disabled: None,
 };
 
 const BTNIMG_SHOWN: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/shown_normal.png"),
-    hovered: include_bytes!("../assets/shown_hovered.png"),
-    pressed: include_bytes!("../assets/shown_pressed.png"),
+    normal: include_bytes!("../assets/buttons/shown_normal.png"),
+    hovered: include_bytes!("../assets/buttons/shown_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/shown_pressed.png"),
     disabled: None,
 };
 
 const BTNIMG_HIDDEN: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/hidden_normal.png"),
-    hovered: include_bytes!("../assets/hidden_hovered.png"),
-    pressed: include_bytes!("../assets/hidden_pressed.png"),
-    disabled: Some(include_bytes!("../assets/hidden_disabled.png")),
+    normal: include_bytes!("../assets/buttons/hidden_normal.png"),
+    hovered: include_bytes!("../assets/buttons/hidden_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/hidden_pressed.png"),
+    disabled: Some(include_bytes!("../assets/buttons/hidden_disabled.png")),
 };
 
 const BTNIMG_NEXT: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/next_normal.png"),
-    hovered: include_bytes!("../assets/next_hovered.png"),
-    pressed: include_bytes!("../assets/next_pressed.png"),
-    disabled: Some(include_bytes!("../assets/next_disabled.png")),
+    normal: include_bytes!("../assets/buttons/next_normal.png"),
+    hovered: include_bytes!("../assets/buttons/next_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/next_pressed.png"),
+    disabled: Some(include_bytes!("../assets/buttons/next_disabled.png")),
 };
 
 const BTNIMG_PREV: ButtonImages = ButtonImages {
-    normal: include_bytes!("../assets/prev_normal.png"),
-    hovered: include_bytes!("../assets/prev_hovered.png"),
-    pressed: include_bytes!("../assets/prev_pressed.png"),
-    disabled: Some(include_bytes!("../assets/prev_disabled.png")),
+    normal: include_bytes!("../assets/buttons/prev_normal.png"),
+    hovered: include_bytes!("../assets/buttons/prev_hovered.png"),
+    pressed: include_bytes!("../assets/buttons/prev_pressed.png"),
+    disabled: Some(include_bytes!("../assets/buttons/prev_disabled.png")),
 };
 
 #[derive(Copy, Clone)]
