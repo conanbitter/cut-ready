@@ -505,7 +505,8 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
-    try_batch_convert();
+    let result = try_batch_convert();
+    println!("Result: {:?}", result);
     return Ok(());
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
