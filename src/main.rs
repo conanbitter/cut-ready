@@ -14,6 +14,7 @@ use winit::{
     window::{Icon, Window, WindowId},
 };
 
+use crate::batchconv::try_batch_convert;
 use crate::{
     blueprint::{decode_dxf, load_dxf},
     diereader::{convert_die, load_die},
@@ -21,6 +22,7 @@ use crate::{
     inker::Inker,
 };
 
+mod batchconv;
 mod blueprint;
 mod camera;
 mod curves;
@@ -503,6 +505,8 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
+    try_batch_convert();
+    return Ok(());
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
