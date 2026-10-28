@@ -1,10 +1,20 @@
-use std::path::PathBuf;
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{MAIN_SEPARATOR_STR, Path, PathBuf},
+};
+
+use anyhow::bail;
+use walkdir::WalkDir;
+
+use crate::diereader::convert_die;
 
 const CLI_LOGO: &str = "  _____     __     ___              __    
  / ___/_ __/ /_   / _ \\___ ___ ____/ /_ __
 / /__/ // / __/  / , _/ -_) _ `/ _  / // /
 \\___/\\_,_/\\__/  /_/|_|\\__/\\_,_/\\_,_/\\_, / 
-                                   /___/";
+                                   /___/
+";
 
 const CLI_USAGE: &str = "Usage:
   cut-ready <filename>
@@ -20,6 +30,17 @@ Options:
   -i --include-sub  When converting all files in a folder,
                     also include files in al subfolders
     ";
+
+#[cfg(all(not(debug_assertions), windows))]
+fn attach_console() {
+    use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+
+    unsafe {
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+
+    println!("Console attached")
+}
 
 // Returns:
 // None - no further actions needed
@@ -51,11 +72,14 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
         }
     }
 
-    println!("help {}", help);
+    #[cfg(all(not(debug_assertions), windows))]
+    attach_console();
+
+    /*println!("help {}", help);
     println!("convert {}", convert);
     println!("incl cubdirs {}", include_subdirs);
     println!("input {:?}", input);
-    println!("output {:?}", output);
+    println!("output {:?}", output);*/
 
     if help {
         println!("{}", CLI_LOGO);
@@ -73,8 +97,120 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
         }
     }
 
+    println!("{}", CLI_LOGO);
+
     if let Some(input) = input {
+        if !input.exists() {
+            println!("Input path \"{}\" desn't exist", input.display());
+            return None;
+        }
+
+        let Some(abs_input) = std::path::absolute(input.clone()).ok() else {
+            println!("Input path \"{}\" is wrong", input.display());
+            return None;
+        };
+
+        let abs_output = if let Some(output) = output {
+            let Some(res) = std::path::absolute(output.clone()).ok() else {
+                println!("Output path \"{}\" is wrong", input.display());
+                return None;
+            };
+            Some(res)
+        } else {
+            None
+        };
+
+        match convert_some(abs_input, abs_output, include_subdirs) {
+            Ok(_) => {
+                println!("Done!");
+            }
+            Err(err) => println!("ERROR: {}", err),
+        }
     } else {
+        println!("{}", CLI_USAGE);
     }
     None
+}
+
+fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::Result<()> {
+    //println!("Abs input: {}", input.display());
+    //println!("Abs output: {:?}", output);
+
+    if input.is_file() {
+        //println!("Single file");
+        let output = if let Some(output) = output {
+            if is_dir(&output) {
+                output.join(input.file_name().unwrap()).with_extension("die")
+            } else {
+                output
+            }
+        } else {
+            input.with_extension("dxf")
+        };
+        convert_single(input, output)?;
+    } else if input.is_dir() {
+        if let Some(output) = output.as_ref()
+            && !is_dir(output)
+        {
+            bail!("output must be a folder")
+        }
+        //println!("Multiple files");
+
+        let files = find_files(&input, deep)?;
+        for file in files {
+            let output = match output.as_ref() {
+                Some(outfolder) => outfolder.join(file.strip_prefix(&input)?).with_extension("dxf"),
+                None => file.with_extension("dxf"),
+            };
+            convert_single(file, output)?;
+        }
+    } else {
+        bail!("wrong input");
+    }
+    Ok(())
+}
+
+fn is_dir(path: &Path) -> bool {
+    if path.exists() && path.is_dir() {
+        true
+    } else {
+        let out_str = path.to_string_lossy();
+        out_str.ends_with("/") || out_str.ends_with(MAIN_SEPARATOR_STR)
+    }
+}
+
+fn find_files(path: &Path, deep: bool) -> anyhow::Result<Vec<PathBuf>> {
+    let die_ext = Some(OsStr::new("die"));
+
+    if deep {
+        Ok(WalkDir::new(path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file() && e.path().extension() == die_ext)
+            .map(|e| e.path().into())
+            .collect())
+    } else {
+        let entries = fs::read_dir(path)?;
+
+        Ok(entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension() == die_ext)
+            .collect())
+    }
+}
+
+fn ensure_folder_exist(file_path: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+fn convert_single(input: PathBuf, output: PathBuf) -> anyhow::Result<()> {
+    println!("Converting:");
+    println!(" ╭── {}", input.display());
+    println!(" ╰─► {}\n", output.display());
+    ensure_folder_exist(&output)?;
+    convert_die(input, output)
 }

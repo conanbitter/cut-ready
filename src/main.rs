@@ -221,6 +221,7 @@ struct App<'a> {
     context: Context<OwnedDisplayHandle>,
     state: Option<AppState<'a>>,
     proxy: EventLoopProxy<UserEvent>,
+    start_file: Option<PathBuf>,
 }
 
 impl<'a> ApplicationHandler<UserEvent> for App<'a> {
@@ -290,12 +291,11 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             });
 
             if let Some(state) = self.state.as_mut() {
-                let args: Vec<String> = std::env::args().collect();
-                if args.len() > 1 {
-                    state.open_file(PathBuf::from(args[1].clone()), false);
+                if let Some(start_file) = self.start_file.take() {
+                    state.open_file(start_file, false);
                 } else {
                     state.open_file(PathBuf::default(), true);
-                };
+                }
             }
         }
     }
@@ -505,9 +505,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let result = try_batch_convert();
-    println!("Result: {:?}", result);
-    return Ok(());
+    let Some(start_file) = try_batch_convert() else {
+        return Ok(());
+    };
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
     let context = Context::new(event_loop.owned_display_handle()).unwrap();
@@ -517,6 +517,7 @@ fn main() -> anyhow::Result<()> {
         context,
         state: None,
         proxy,
+        start_file,
     };
     event_loop.run_app(&mut app)?;
     Ok(())

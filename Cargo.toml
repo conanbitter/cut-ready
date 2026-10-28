@@ -16,7 +16,11 @@ futures = "0.3.34"
 rfd = "0.17.2"
 softbuffer = "0.4.8"
 tiny-skia = "0.12.0"
+walkdir = "2.5.0"
 winit = "0.30.13"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_System_Console"] }
 
 [build-dependencies]
 winresource = "0.1.34"
