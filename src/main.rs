@@ -485,7 +485,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             }
 
             WindowEvent::RedrawRequested => {
-                let data = app_state.inker.draw(&app_state.gui, app_state.show_errors);
+                let data = app_state.inker.draw(&mut app_state.gui, app_state.show_errors);
 
                 let mut buffer = app_state.surface.buffer_mut().unwrap();
 

@@ -41,8 +41,8 @@ impl<'a> Inker<'a> {
         self.camera.resize(width as f32, height as f32);
     }
 
-    pub fn draw(&mut self, gui: &Gui, show_errors: bool) -> &[u8] {
-        self.pixmap.fill(Color::WHITE);
+    pub fn draw(&mut self, gui: &mut Gui, show_errors: bool) -> &[u8] {
+        //self.pixmap.fill(Color::WHITE);
 
         for layer in &self.current_blueprint.layers {
             self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);

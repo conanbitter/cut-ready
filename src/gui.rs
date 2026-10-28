@@ -2,17 +2,8 @@ use tiny_skia::{BlendMode, FilterQuality, Pixmap, PixmapPaint, Transform};
 
 pub const GUI_PAINT: PixmapPaint = PixmapPaint {
     opacity: 1.0,
-    blend_mode: BlendMode::SourceOver,
+    blend_mode: BlendMode::Source,
     quality: FilterQuality::Nearest,
-};
-
-pub const GUI_TRANSFORM: Transform = Transform {
-    sx: 1.0,
-    kx: 0.0,
-    ky: 0.0,
-    sy: 1.0,
-    tx: 0.0,
-    ty: 0.0,
 };
 
 const BUTTON_SPACING: i32 = 2;
@@ -88,7 +79,7 @@ const BTNIMG_PREV: ButtonImages = ButtonImages {
     disabled: Some(include_bytes!("../assets/buttons/prev_disabled.png")),
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum ButtonState {
     Normal,
     Hovered,
@@ -108,6 +99,7 @@ struct Button {
     image_disabled: Option<Pixmap>,
     visible: bool,
     command: GuiCommand,
+    redraw_needed: bool,
 }
 
 #[derive(Default)]
@@ -139,127 +131,88 @@ impl Button {
             image_disabled,
             visible,
             command,
+            redraw_needed: true,
         }
     }
 
-    fn draw(&self, pixmap: &mut Pixmap) {
+    fn draw(&mut self, pixmap: &mut Pixmap) {
         if !self.visible {
             return;
         }
-        let image = match self.state {
-            ButtonState::Normal => &self.image_normal,
-            ButtonState::Hovered => &self.image_hovered,
-            ButtonState::Pressed => &self.image_pressed,
-            ButtonState::Disabled => {
-                if let Some(image) = self.image_disabled.as_ref() {
-                    image
-                } else {
-                    &self.image_normal
+        if self.redraw_needed {
+            let image = match self.state {
+                ButtonState::Normal => &self.image_normal,
+                ButtonState::Hovered => &self.image_hovered,
+                ButtonState::Pressed => &self.image_pressed,
+                ButtonState::Disabled => {
+                    if let Some(image) = self.image_disabled.as_ref() {
+                        image
+                    } else {
+                        &self.image_normal
+                    }
                 }
-            }
-        };
-        pixmap.draw_pixmap(self.x, self.y, image.as_ref(), &GUI_PAINT, GUI_TRANSFORM, None);
+            };
+            pixmap.draw_pixmap(self.x, self.y, image.as_ref(), &GUI_PAINT, Transform::identity(), None);
+            self.redraw_needed = false;
+        }
     }
 
     fn mouse_inbound(&self, x: i32, y: i32) -> bool {
         x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
     }
 
-    fn mouse_move(&mut self, x: i32, y: i32) -> GuiInteractionResult {
+    fn mouse_move(&mut self, x: i32, y: i32) -> bool {
         if !self.visible {
-            return GuiInteractionResult {
-                captured: false,
-                needs_redraw: false,
-            };
+            return false;
         }
         let inbound = self.mouse_inbound(x, y);
-        let needs_redraw = match self.state {
-            ButtonState::Normal => {
-                if inbound {
-                    self.state = ButtonState::Hovered;
-                    true
-                } else {
-                    false
-                }
-            }
-            ButtonState::Hovered | ButtonState::Pressed => {
-                if inbound {
-                    false
-                } else {
-                    self.state = ButtonState::Normal;
-                    true
-                }
-            }
-            ButtonState::Disabled => false,
+        let old_state = self.state;
+        match self.state {
+            ButtonState::Normal if inbound => self.state = ButtonState::Hovered,
+            ButtonState::Hovered | ButtonState::Pressed if !inbound => self.state = ButtonState::Normal,
+            _ => (),
         };
-        GuiInteractionResult {
-            captured: inbound,
-            needs_redraw,
-        }
+        self.redraw_needed = self.state != old_state;
+        inbound
     }
 
-    fn mouse_press(&mut self, x: i32, y: i32) -> GuiInteractionResult {
+    fn mouse_press(&mut self, x: i32, y: i32) -> bool {
         if !self.visible {
-            return GuiInteractionResult {
-                captured: false,
-                needs_redraw: false,
-            };
+            return false;
         }
         let inbound = self.mouse_inbound(x, y);
-        let needs_redraw = match self.state {
-            ButtonState::Normal | ButtonState::Hovered => {
-                if self.mouse_inbound(x, y) {
-                    self.state = ButtonState::Pressed;
-                    true
-                } else {
-                    false
-                }
-            }
-            ButtonState::Disabled | ButtonState::Pressed => false,
+        let old_state = self.state;
+        match self.state {
+            ButtonState::Normal | ButtonState::Hovered if inbound => self.state = ButtonState::Pressed,
+            _ => (),
         };
-        GuiInteractionResult {
-            captured: inbound,
-            needs_redraw,
-        }
+        self.redraw_needed = self.state != old_state;
+        inbound
     }
 
-    fn mouse_release(&mut self, x: i32, y: i32) -> (GuiInteractionResult, GuiCommand) {
+    fn mouse_release(&mut self, x: i32, y: i32) -> (bool, GuiCommand) {
         if !self.visible {
-            return (
-                GuiInteractionResult {
-                    captured: false,
-                    needs_redraw: false,
-                },
-                GuiCommand::None,
-            );
+            return (false, GuiCommand::None);
         }
         let inbound = self.mouse_inbound(x, y);
-        let (needs_redraw, command) = match self.state {
-            ButtonState::Normal => {
-                if self.mouse_inbound(x, y) {
-                    self.state = ButtonState::Hovered;
-                    (true, GuiCommand::None)
-                } else {
-                    (false, GuiCommand::None)
-                }
+        let old_state = self.state;
+        let command = match self.state {
+            ButtonState::Normal if inbound => {
+                self.state = ButtonState::Hovered;
+                GuiCommand::None
             }
             ButtonState::Pressed => {
-                if self.mouse_inbound(x, y) {
+                if inbound {
                     self.state = ButtonState::Hovered;
                 } else {
                     self.state = ButtonState::Normal;
                 }
-                (true, self.command)
+                self.command
             }
-            ButtonState::Disabled | ButtonState::Hovered => (false, GuiCommand::None),
+            _ => GuiCommand::None,
         };
-        (
-            GuiInteractionResult {
-                captured: inbound,
-                needs_redraw,
-            },
-            command,
-        )
+        self.redraw_needed = self.state != old_state;
+        (inbound, command)
     }
 
     fn enable(&mut self) {
@@ -358,8 +311,8 @@ impl Gui {
         }
     }
 
-    pub fn draw(&self, pixmap: &mut Pixmap) {
-        for btn in &self.buttons {
+    pub fn draw(&mut self, pixmap: &mut Pixmap) {
+        for btn in &mut self.buttons {
             btn.draw(pixmap);
         }
     }
@@ -378,6 +331,11 @@ impl Gui {
         }
         self.buttons[7].disable();
         self.buttons[8].disable();
+
+        self.buttons[5].redraw_needed = true;
+        self.buttons[6].redraw_needed = true;
+        self.buttons[7].redraw_needed = true;
+        self.buttons[8].redraw_needed = true;
     }
 
     pub fn show_errors(&mut self, permanent: bool, x: i32, y: i32) {
@@ -393,30 +351,47 @@ impl Gui {
         }
         self.buttons[7].enable();
         self.buttons[8].enable();
+
+        self.buttons[5].redraw_needed = true;
+        self.buttons[6].redraw_needed = true;
+        self.buttons[7].redraw_needed = true;
+        self.buttons[8].redraw_needed = true;
     }
 
     pub fn mouse_move(&mut self, x: i32, y: i32) -> GuiInteractionResult {
-        let mut total_res = GuiInteractionResult::default();
+        let mut total_captured = false;
+        let mut redraw_needed = false;
         for btn in &mut self.buttons {
-            total_res.append(btn.mouse_move(x, y));
+            total_captured = total_captured || btn.mouse_move(x, y);
+            redraw_needed = redraw_needed || btn.redraw_needed;
         }
-        total_res
+        GuiInteractionResult {
+            captured: total_captured,
+            needs_redraw: redraw_needed,
+        }
     }
 
     pub fn mouse_press(&mut self, x: i32, y: i32) -> GuiInteractionResult {
-        let mut total_res = GuiInteractionResult::default();
+        let mut total_captured = false;
+        let mut redraw_needed = false;
         for btn in &mut self.buttons {
-            total_res.append(btn.mouse_press(x, y));
+            total_captured = total_captured || btn.mouse_press(x, y);
+            redraw_needed = redraw_needed || btn.redraw_needed;
         }
-        total_res
+        GuiInteractionResult {
+            captured: total_captured,
+            needs_redraw: redraw_needed,
+        }
     }
 
     pub fn mouse_release(&mut self, x: i32, y: i32) -> (GuiInteractionResult, GuiCommand) {
-        let mut total_res = GuiInteractionResult::default();
+        let mut total_captured = false;
+        let mut redraw_needed = false;
         let mut res_command = GuiCommand::None;
         for btn in &mut self.buttons {
-            let (res, command) = btn.mouse_release(x, y);
-            total_res.append(res);
+            let (captured, command) = btn.mouse_release(x, y);
+            total_captured = total_captured || captured;
+            redraw_needed = redraw_needed || btn.redraw_needed;
             match command {
                 GuiCommand::None => (),
                 _ => res_command = command,
@@ -429,15 +404,23 @@ impl Gui {
             _ => (),
         }
 
-        (total_res, res_command)
+        (
+            GuiInteractionResult {
+                captured: total_captured,
+                needs_redraw: redraw_needed,
+            },
+            res_command,
+        )
     }
 
     pub fn enable_saving(&mut self) {
         self.buttons[1].enable();
+        self.buttons[1].redraw_needed = true;
     }
 
     pub fn disable_saving(&mut self) {
         self.buttons[1].disable();
+        self.buttons[1].redraw_needed = true;
     }
 
     pub fn toggle_errors(&mut self, x: i32, y: i32) -> bool {
