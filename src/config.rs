@@ -64,7 +64,7 @@ impl Configuration {
         let mut config = Configuration::default();
         let _ = config.load();
 
-        println!("{:?}", config);
+        //println!("{:?}", config);
 
         config
     }

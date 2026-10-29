@@ -258,7 +258,6 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     };
                 }
             }
-            println!("{:?}", window_size);
 
             let attributes = Window::default_attributes()
                 .with_title("Cut Ready")
