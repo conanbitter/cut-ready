@@ -11,6 +11,9 @@ pub const GUI_PAINT: PixmapPaint = PixmapPaint {
 const BUTTON_SPACING: i32 = 2;
 const BUTTON_WIDE_SPACING: i32 = 10;
 
+const TOOLTIP_FADEIN_DURATION: Duration = Duration::from_secs(3);
+const TOOLTIP_FADEOUT_DURATION: Duration = Duration::from_secs(1);
+
 struct ButtonImages {
     normal: &'static [u8],
     hovered: &'static [u8],
@@ -226,6 +229,10 @@ impl Button {
     fn disable(&mut self) {
         self.state = ButtonState::Disabled;
     }
+
+    fn is_disabled(&self) -> bool {
+        matches!(self.state, ButtonState::Disabled)
+    }
 }
 
 /*
@@ -262,6 +269,8 @@ pub struct Gui {
     buttons: [Button; 9],
     pub height: i32,
     pub timer: Option<Instant>,
+    tooltip_button: Option<usize>,
+    tooltip_state: TooltipState,
 }
 
 impl Gui {
@@ -321,6 +330,8 @@ impl Gui {
             ],
             height,
             timer: None,
+            tooltip_button: None,
+            tooltip_state: TooltipState::Hidden,
         }
     }
 
@@ -374,11 +385,26 @@ impl Gui {
     pub fn mouse_move(&mut self, x: i32, y: i32) -> GuiInteractionResult {
         let mut total_captured = false;
         let mut redraw_needed = false;
-        for btn in &mut self.buttons {
+        let mut hovered: Option<usize> = None;
+        for (i, btn) in self.buttons.iter_mut().enumerate() {
             let captured = btn.mouse_move(x, y);
             total_captured = total_captured || captured;
             redraw_needed = redraw_needed || btn.redraw_needed;
+            if captured && !btn.is_disabled() {
+                hovered = Some(i);
+            }
         }
+
+        if let Some(hovered_index) = hovered {
+            if hovered != self.tooltip_button {
+                self.on_enter(hovered_index);
+            }
+        } else {
+            if hovered != self.tooltip_button {
+                self.on_leave(false);
+            }
+        }
+
         GuiInteractionResult {
             captured: total_captured,
             needs_redraw: redraw_needed,
@@ -392,6 +418,9 @@ impl Gui {
             let captured = btn.mouse_press(x, y);
             total_captured = total_captured || captured;
             redraw_needed = redraw_needed || btn.redraw_needed;
+        }
+        if self.tooltip_button.is_some() {
+            self.on_leave(true);
         }
         GuiInteractionResult {
             captured: total_captured,
@@ -419,8 +448,6 @@ impl Gui {
             _ => (),
         }
 
-        self.set_timer(Duration::from_secs(3));
-
         (
             GuiInteractionResult {
                 captured: total_captured,
@@ -442,6 +469,7 @@ impl Gui {
                 _ => (),
             }
         }
+        self.on_leave(false);
         redraw_needed
     }
 
@@ -478,7 +506,63 @@ impl Gui {
     }
 
     pub fn on_timer(&mut self) -> bool {
-        println!("On timer");
+        match self.tooltip_state {
+            TooltipState::FadeIn => {
+                if let Some(btn) = self.tooltip_button {
+                    println!("Show tooltip {}", btn);
+                    self.tooltip_state = TooltipState::Showing;
+                }
+            }
+            TooltipState::FadeOut => {
+                println!("Hide tooltip");
+                self.tooltip_state = TooltipState::Hidden;
+            }
+            _ => (),
+        }
         false
+    }
+
+    fn on_enter(&mut self, btn: usize) {
+        match self.tooltip_state {
+            TooltipState::Showing if Some(btn) != self.tooltip_button => println!("Switch tooltip to {}", btn),
+            TooltipState::Hidden => {
+                self.tooltip_state = TooltipState::FadeIn;
+                self.set_timer(TOOLTIP_FADEIN_DURATION);
+            }
+            TooltipState::FadeIn => self.set_timer(TOOLTIP_FADEIN_DURATION),
+            TooltipState::FadeOut => {
+                if Some(btn) != self.tooltip_button {
+                    println!("Switch tooltip to {}", btn);
+                }
+                self.tooltip_state = TooltipState::Showing;
+                self.reset_timer();
+            }
+            _ => (),
+        }
+        self.tooltip_button = Some(btn);
+    }
+
+    fn on_leave(&mut self, immediate: bool) {
+        self.tooltip_button = None;
+
+        if immediate {
+            if !matches!(self.tooltip_state, TooltipState::Hidden) {
+                println!("Hide tooltip");
+            }
+            self.tooltip_state = TooltipState::Hidden;
+            self.reset_timer();
+        }
+
+        match self.tooltip_state {
+            TooltipState::Showing => {
+                self.tooltip_state = TooltipState::FadeOut;
+                self.set_timer(TOOLTIP_FADEOUT_DURATION);
+            }
+            TooltipState::FadeIn => {
+                self.tooltip_state = TooltipState::Hidden;
+                self.reset_timer();
+            }
+            _ => (),
+        }
     }
 }
