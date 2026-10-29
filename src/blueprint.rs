@@ -6,6 +6,7 @@ use std::{collections::HashMap, f64::consts::TAU, io::Cursor, path::Path, vec};
 use tiny_skia::{PathBuilder, Rect, Transform};
 
 use crate::{
+    config::CONFIG,
     curves::curve_path,
     geometry::{EPSILON64, Point2D},
     pointerrors::{PointErrors, collect_errors},
@@ -118,11 +119,14 @@ impl<'a> Default for Blueprint<'a> {
 }
 
 fn get_line_type(color: i32) -> LineType {
-    match color {
-        0x007FFF | 0x0080FF | 0x0000FF => LineType::Main,
-        0x008181 | 0x009696 | 0x006868 => LineType::Cuts,
-        0x000000 => LineType::Marks,
-        _ => LineType::Other,
+    if CONFIG.colors.main.contains(&color) {
+        LineType::Main
+    } else if CONFIG.colors.cuts.contains(&color) {
+        LineType::Cuts
+    } else if CONFIG.colors.marks.contains(&color) {
+        LineType::Marks
+    } else {
+        LineType::Other
     }
 }
 

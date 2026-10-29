@@ -25,6 +25,7 @@ use crate::{
 mod batchconv;
 mod blueprint;
 mod camera;
+mod config;
 mod curves;
 mod diereader;
 mod geometry;
