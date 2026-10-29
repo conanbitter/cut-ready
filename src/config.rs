@@ -149,6 +149,7 @@ impl Configuration {
         // Language
         if let Some(lang) = file.get("language")
             && let JsonValue::String(lang) = lang
+            && lang != "auto"
         {
             self.language = Some(lang.to_owned());
         }
