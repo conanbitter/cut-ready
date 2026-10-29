@@ -15,6 +15,7 @@ use winit::{
 };
 
 use crate::batchconv::try_batch_convert;
+use crate::config::{CONFIG, ConfWindow};
 use crate::{
     blueprint::{decode_dxf, load_dxf},
     diereader::{convert_die, load_die},
@@ -242,10 +243,27 @@ struct App<'a> {
 impl<'a> ApplicationHandler<UserEvent> for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
+            let mut window_size = CONFIG.window;
+            if window_size.width == 0 || window_size.height == 0 {
+                if let Some(monitor) = event_loop
+                    .primary_monitor()
+                    .or_else(|| event_loop.available_monitors().next())
+                {
+                    window_size.width = (monitor.size().width as f32 * 2.0 / 3.0) as i32;
+                    window_size.height = (monitor.size().height as f32 * 2.0 / 3.0) as i32;
+                } else {
+                    window_size = ConfWindow {
+                        width: 1280,
+                        height: 720,
+                    };
+                }
+            }
+            println!("{:?}", window_size);
+
             let attributes = Window::default_attributes()
                 .with_title("Cut Ready")
                 .with_window_icon(Icon::from_resource(1, None).ok())
-                .with_inner_size(PhysicalSize::new(1280, 720))
+                .with_inner_size(PhysicalSize::new(window_size.width, window_size.height))
                 .with_visible(false);
 
             let window = event_loop.create_window(attributes).unwrap();

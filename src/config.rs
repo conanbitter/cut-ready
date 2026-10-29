@@ -13,9 +13,16 @@ pub struct ConfigColors {
     pub marks: HashSet<i32>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ConfWindow {
+    pub width: i32,
+    pub height: i32,
+}
+
 #[derive(Debug)]
 pub struct Configuration {
     pub colors: ConfigColors,
+    pub window: ConfWindow,
 }
 
 impl Default for Configuration {
@@ -26,7 +33,10 @@ impl Default for Configuration {
             marks: HashSet::from([0]),
         };
 
-        Configuration { colors }
+        Configuration {
+            colors,
+            window: ConfWindow { width: 0, height: 0 },
+        }
     }
 }
 
@@ -63,6 +73,21 @@ impl Configuration {
                 && let Some(colors) = json_to_color_set(marks)
             {
                 self.colors.marks = colors;
+            }
+        }
+
+        // Window
+        if let Some(JsonValue::Object(window)) = file.get("window") {
+            if let Some(width) = window.get("width")
+                && let JsonValue::Number(width) = width
+            {
+                self.window.width = *width as i32;
+            }
+
+            if let Some(height) = window.get("height")
+                && let JsonValue::Number(height) = height
+            {
+                self.window.height = *height as i32;
             }
         }
         Ok(())
