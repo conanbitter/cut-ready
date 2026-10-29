@@ -217,7 +217,14 @@ impl<'a> AppState<'a> {
                 blueprint::LineType::Marks => "marks",
                 blueprint::LineType::Other => "other",
             };
-            let _ = writeln!(&mut buffer, "{0:06X}   {0:08}   {1}", layer.hint_color, layer_type);
+            let r = ((layer.hint_color >> 16) & 0xFF) as u8;
+            let g = ((layer.hint_color >> 8) & 0xFF) as u8;
+            let b = (layer.hint_color & 0xFF) as u8;
+            let _ = writeln!(
+                &mut buffer,
+                "{0:08}    #{0:06X}   RGB({2:03}, {3:03}, {4:03})   {1}\n",
+                layer.hint_color, layer_type, r, g, b
+            );
         }
 
         self.message_box("Colors", &buffer, MessageLevel::Info);
@@ -464,7 +471,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             app_state.command(GuiCommand::ZoomOut);
                             app_state.window.request_redraw();
                         }
-                        KeyCode::KeyC if app_state.ctrl_pressed => {
+                        KeyCode::KeyL if app_state.ctrl_pressed => {
                             app_state.color_hint();
                         }
                         KeyCode::KeyA if app_state.ctrl_pressed => {
