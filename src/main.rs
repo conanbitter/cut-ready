@@ -373,9 +373,13 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             && let Some(timer) = app_state.gui.timer
         {
             if Instant::now() >= timer {
-                if app_state.gui.on_timer() {
-                    app_state.inker.redraw_needed = true;
-                    app_state.window.request_redraw();
+                match app_state.gui.on_timer() {
+                    gui::RedrawLevel::None => (),
+                    gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                    gui::RedrawLevel::Full => {
+                        app_state.inker.redraw_needed = true;
+                        app_state.window.request_redraw();
+                    }
                 }
 
                 app_state.gui.reset_timer();
@@ -420,8 +424,13 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         app_state.old_x = app_state.mouse_x;
                         app_state.old_y = app_state.mouse_y;
                     }
-                    if gui_result.needs_redraw {
-                        app_state.window.request_redraw();
+                    match gui_result.needs_redraw {
+                        gui::RedrawLevel::None => (),
+                        gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                        gui::RedrawLevel::Full => {
+                            app_state.inker.redraw_needed = true;
+                            app_state.window.request_redraw();
+                        }
                     }
                 }
                 winit::event::ElementState::Released => {
@@ -429,12 +438,15 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         .gui
                         .mouse_release(app_state.mouse_x as i32, app_state.mouse_y as i32);
                     app_state.drag = false;
-                    if gui_result.needs_redraw {
-                        app_state.window.request_redraw();
-                    } else {
-                        match gui_command {
+                    match gui_result.needs_redraw {
+                        gui::RedrawLevel::None => match gui_command {
                             GuiCommand::None => (),
                             _ => app_state.window.request_redraw(),
+                        },
+                        gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                        gui::RedrawLevel::Full => {
+                            app_state.inker.redraw_needed = true;
+                            app_state.window.request_redraw();
                         }
                     }
                     match gui_command {
@@ -458,12 +470,17 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         app_state.inker.camera.pan(dx as f32, dy as f32);
                         app_state.old_x = position.x;
                         app_state.old_y = position.y;
-                        needs_redraw = true;
+                        needs_redraw = gui::RedrawLevel::Full;
                         app_state.inker.redraw_needed = true;
                     }
                 }
-                if needs_redraw {
-                    app_state.window.request_redraw();
+                match needs_redraw {
+                    gui::RedrawLevel::None => (),
+                    gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                    gui::RedrawLevel::Full => {
+                        app_state.inker.redraw_needed = true;
+                        app_state.window.request_redraw();
+                    }
                 }
             }
 
