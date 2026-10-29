@@ -35,6 +35,7 @@ pub struct Configuration {
     pub window: ConfWindow,
     pub line_widths: ConfLineWidths,
     pub error_size: f32,
+    pub language: Option<String>,
 }
 
 impl Default for Configuration {
@@ -55,6 +56,7 @@ impl Default for Configuration {
                 error: 3.0 - LINEWIDTH_BIAS,
             },
             error_size: 15.0,
+            language: None,
         }
     }
 }
@@ -142,6 +144,13 @@ impl Configuration {
             && let JsonValue::Number(size) = size
         {
             self.error_size = *size as f32 / 2.0;
+        }
+
+        // Language
+        if let Some(lang) = file.get("language")
+            && let JsonValue::String(lang) = lang
+        {
+            self.language = Some(lang.to_owned());
         }
 
         Ok(())

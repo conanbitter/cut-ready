@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
+use rust_i18n::set_locale;
 use softbuffer::{Context, Surface};
 use std::fmt::Write;
 use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
@@ -22,6 +23,10 @@ use crate::{
     gui::{Gui, GuiCommand},
     inker::Inker,
 };
+
+#[macro_use]
+extern crate rust_i18n;
+i18n!("locales", fallback = "en");
 
 mod batchconv;
 mod blueprint;
@@ -61,11 +66,11 @@ impl<'a> AppState<'a> {
     fn open_file_dialog(&self) {
         let task = AsyncFileDialog::new()
             .set_parent(&self.window)
-            .set_title("Open DXF file")
-            .add_filter("Supported files", &["dxf", "die"])
-            .add_filter("DXF files", &["dxf"])
-            .add_filter("DIE files", &["die"])
-            .add_filter("All files", &["*"])
+            .set_title(t!("open.title"))
+            .add_filter(t!("open.supported"), &["dxf", "die"])
+            .add_filter(t!("open.dxf"), &["dxf"])
+            .add_filter(t!("open.die"), &["die"])
+            .add_filter(t!("open.all"), &["*"])
             .pick_file();
 
         let proxy = self.event_proxy.clone();
@@ -79,9 +84,9 @@ impl<'a> AppState<'a> {
     fn save_file_dialog(&self, filename: String) {
         let task = AsyncFileDialog::new()
             .set_parent(&self.window)
-            .set_title("Save DXF file")
-            .add_filter("DXF files", &["dxf"])
-            .add_filter("All files", &["*"])
+            .set_title(t!("save.title"))
+            .add_filter(t!("save.dxf"), &["dxf"])
+            .add_filter(t!("save.all"), &["*"])
             .set_file_name(filename)
             .save_file();
 
@@ -148,8 +153,8 @@ impl<'a> AppState<'a> {
             }
             Err(err) => {
                 self.message_box(
-                    "File error",
-                    format!("Error opening file\n{}", err).as_str(),
+                    &t!("openerror.title"),
+                    format!("{}:\n{}", t!("openerror.text"), err).as_str(),
                     MessageLevel::Error,
                 );
             }
@@ -210,14 +215,15 @@ impl<'a> AppState<'a> {
     }
 
     fn color_hint(&self) {
-        let mut buffer = String::from("Line colors:\n\n");
+        let mut buffer = String::new();
+        let _ = writeln!(buffer, "{}:\n", t!("colorhint.descr"));
 
         for layer in &self.inker.current_blueprint.layers {
             let layer_type = match layer.hint_type {
-                blueprint::LineType::Main => "main",
-                blueprint::LineType::Cuts => "cuts",
-                blueprint::LineType::Marks => "marks",
-                blueprint::LineType::Other => "other",
+                blueprint::LineType::Main => t!("colorhint.main"),
+                blueprint::LineType::Cuts => t!("colorhint.cuts"),
+                blueprint::LineType::Marks => t!("colorhint.marks"),
+                blueprint::LineType::Other => t!("colorhint.other"),
             };
             let r = ((layer.hint_color >> 16) & 0xFF) as u8;
             let g = ((layer.hint_color >> 8) & 0xFF) as u8;
@@ -229,7 +235,7 @@ impl<'a> AppState<'a> {
             );
         }
 
-        self.message_box("Colors", &buffer, MessageLevel::Info);
+        self.message_box(&t!("colorhint.title"), &buffer, MessageLevel::Info);
     }
 }
 
@@ -344,10 +350,14 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             UserEvent::FileSaveSelected(Some(path)) => {
                 if let Some(die_filename) = app_state.current_filename.as_ref() {
                     match convert_die(die_filename, path) {
-                        Ok(_) => app_state.message_box("Success", "File successfully converted!", MessageLevel::Info),
+                        Ok(_) => app_state.message_box(
+                            &t!("convert.success_title"),
+                            &t!("convert.success_text"),
+                            MessageLevel::Info,
+                        ),
                         Err(err) => app_state.message_box(
-                            "Convert error",
-                            format!("Error converting file\n{}", err).as_str(),
+                            &t!("convert.error_title"),
+                            format!("{}:\n{}", t!("convert.error_text"), err).as_str(),
                             MessageLevel::Error,
                         ),
                     }
@@ -550,6 +560,13 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
 }
 
 fn main() -> anyhow::Result<()> {
+    let lang = CONFIG
+        .language
+        .to_owned()
+        .or(sys_locale::get_locale())
+        .unwrap_or("en".into());
+    set_locale(&lang);
+
     let Some(start_file) = try_batch_convert() else {
         return Ok(());
     };

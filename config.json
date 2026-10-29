@@ -17,5 +17,7 @@
         "error": 3
     },
 
-    "error_size": 30.0
+    "error_size": 30.0,
+
+    "language": "ru"
 }

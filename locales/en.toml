@@ -1,0 +1,54 @@
+[open]
+title = "Open file"
+supported = "Supported files"
+dxf = "DXF files"
+die = "DIE files"
+all = "All files"
+
+[save]
+title = "Save DXF file"
+dxf = "DXF files"
+all = "All files"
+
+[cli]
+inpexist = "Input path \"%{path}\" doesn't exist"
+inpwrong = "Input path \"%{path}\" is wrong"
+outwrong = "Output path \"%{path}\" is wrong"
+done = "Done!"
+error = "ERROR"
+mustbefolder = "output must be a folder"
+inperr = "wrong input"
+converting = "Converting"
+help = """
+Usage:
+  cut-ready <filename>
+  cut-ready --convert [--include-sub] <input file/folder> [<output file/folder>]
+  cut-ready --help
+
+Options:
+  -h --help         Show help screen
+
+  -c --convert      Convert from DIE to DXF format a single file
+                    or all files in a folder
+
+  -i --include-sub  When converting all files in a folder,
+                    also include files in al subfolders
+"""
+
+[openerror]
+title = "File error"
+text = "Error opening file"
+
+[colorhint]
+title = "Colors"
+descr = "Line colors"
+main = "main"
+cuts = "cuts"
+marks = "marks"
+other = "other"
+
+[convert]
+success_title = "Success"
+success_text = "File successfully converted!"
+error_title = "Error"
+error_text = "Error converting file"

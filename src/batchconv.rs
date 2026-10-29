@@ -16,21 +16,6 @@ const CLI_LOGO: &str = "  _____     __     ___              __
                                    /___/
 ";
 
-const CLI_USAGE: &str = "Usage:
-  cut-ready <filename>
-  cut-ready --convert [--include-sub] <input file/folder> [<output file/folder>]
-  cut-ready --help
-
-Options:
-  -h --help         Show help screen
-
-  -c --convert      Convert from DIE to DXF format a single file
-                    or all files in a folder
-
-  -i --include-sub  When converting all files in a folder,
-                    also include files in al subfolders
-    ";
-
 #[cfg(all(not(debug_assertions), windows))]
 fn attach_console() {
     use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
@@ -39,7 +24,7 @@ fn attach_console() {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
     }
 
-    println!("Console attached")
+    //println!("Console attached")
 }
 
 // Returns:
@@ -82,7 +67,7 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
         #[cfg(all(not(debug_assertions), windows))]
         attach_console();
         println!("{}", CLI_LOGO);
-        println!("{}", CLI_USAGE);
+        println!("{}", t!("cli.help"));
         return None;
     }
 
@@ -103,18 +88,18 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
 
     if let Some(input) = input {
         if !input.exists() {
-            println!("Input path \"{}\" desn't exist", input.display());
+            println!("{}", t!("cli.inpexist", path = input.display()));
             return None;
         }
 
         let Some(abs_input) = std::path::absolute(input.clone()).ok() else {
-            println!("Input path \"{}\" is wrong", input.display());
+            println!("{}", t!("cli.inpwrong", path = input.display()));
             return None;
         };
 
         let abs_output = if let Some(output) = output {
             let Some(res) = std::path::absolute(output.clone()).ok() else {
-                println!("Output path \"{}\" is wrong", input.display());
+                println!("{}", t!("cli.outwrong", path = output.display()));
                 return None;
             };
             Some(res)
@@ -124,12 +109,12 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
 
         match convert_some(abs_input, abs_output, include_subdirs) {
             Ok(_) => {
-                println!("Done!");
+                println!("{}", t!("cli.done"));
             }
-            Err(err) => println!("ERROR: {}", err),
+            Err(err) => println!("{}: {}", t!("cli.error"), err),
         }
     } else {
-        println!("{}", CLI_USAGE);
+        println!("{}", t!("cli.help"));
     }
     None
 }
@@ -154,7 +139,7 @@ fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::
         if let Some(output) = output.as_ref()
             && !is_dir(output)
         {
-            bail!("output must be a folder")
+            bail!(t!("cli.mustbefolder"))
         }
         //println!("Multiple files");
 
@@ -167,7 +152,7 @@ fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::
             convert_single(file, output)?;
         }
     } else {
-        bail!("wrong input");
+        bail!(t!("cli.inperr"));
     }
     Ok(())
 }
@@ -210,7 +195,7 @@ fn ensure_folder_exist(file_path: &Path) -> anyhow::Result<()> {
 }
 
 fn convert_single(input: PathBuf, output: PathBuf) -> anyhow::Result<()> {
-    println!("Converting:");
+    println!("{}:", t!("cli.converting"));
     println!(" ╭── {}", input.display());
     println!(" ╰─► {}\n", output.display());
     ensure_folder_exist(&output)?;
