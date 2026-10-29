@@ -12,7 +12,8 @@ use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 use tiny_skia::{PathBuilder, Rect};
 
 use crate::{
-    blueprint::{self, Blueprint, BlueprintLayer, LINEWIDTH_MAIN, LINEWIDTH_OTHER, LINEWIDTH_THICK, arc_draw},
+    blueprint::{self, Blueprint, BlueprintLayer, arc_draw},
+    config::CONFIG,
     geometry::{EPSILON, Point2D},
     pointerrors::PointErrors,
 };
@@ -443,7 +444,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         layers.push(new_layer(
             path,
             DEFAULT_MARKS_COLOR,
-            LINEWIDTH_OTHER,
+            CONFIG.line_widths.thin,
             blueprint::LineType::Marks,
         ));
     }
@@ -451,7 +452,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         layers.push(new_layer(
             path,
             DEFAULT_CUTS_COLOR,
-            LINEWIDTH_THICK,
+            CONFIG.line_widths.thick,
             blueprint::LineType::Cuts,
         ));
     }
@@ -459,7 +460,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
         layers.push(new_layer(
             path,
             DEFAULT_MAIN_COLOR,
-            LINEWIDTH_MAIN,
+            CONFIG.line_widths.main,
             blueprint::LineType::Main,
         ));
     }

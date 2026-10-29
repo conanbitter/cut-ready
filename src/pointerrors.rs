@@ -1,12 +1,9 @@
 use tiny_skia::PathBuilder;
 
-use crate::geometry::Point2D;
+use crate::{config::CONFIG, geometry::Point2D};
 
 const CONNECT_TRESHOLD: f32 = 0.0001;
 const CONNECT_TRESHOLD2: f32 = CONNECT_TRESHOLD * CONNECT_TRESHOLD;
-
-const MARKER_RADIUS: f32 = 15.0;
-pub const ERROR_LINE_WIDTH: f32 = 2.95;
 
 pub struct PointErrors {
     points: Vec<Point2D>,
@@ -33,7 +30,7 @@ impl PointErrors {
     }
 
     fn draw(points: &[Point2D], pb: &mut PathBuilder, scale: f32) {
-        let radius = MARKER_RADIUS / scale;
+        let radius = CONFIG.error_size / scale;
 
         for point in points {
             pb.push_circle(point.x, point.y, radius);

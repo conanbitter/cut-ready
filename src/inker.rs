@@ -1,6 +1,6 @@
 use tiny_skia::{Color, LineCap, LineJoin, Paint, Pixmap, Stroke};
 
-use crate::{blueprint::Blueprint, camera::Camera, gui::Gui, pointerrors::ERROR_LINE_WIDTH};
+use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, gui::Gui};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
@@ -58,7 +58,7 @@ impl<'a> Inker<'a> {
             if show_errors {
                 self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
                 if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
-                    self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
+                    self.camera.apply_to_stroke(CONFIG.line_widths.error, &mut self.stroke);
                     self.pixmap
                         .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
                 }

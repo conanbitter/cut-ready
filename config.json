@@ -11,8 +11,11 @@
     },
 
     "line_widths": {
-        "main": 1.95,
-        "thick": 2.95,
-        "other": 0.95
-    }
+        "main": 2,
+        "thick": 3,
+        "thin": 1,
+        "error": 3
+    },
+
+    "error_size": 30.0
 }

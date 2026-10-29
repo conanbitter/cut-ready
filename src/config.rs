@@ -6,6 +6,8 @@ use std::{
 };
 use tinyjson::JsonValue;
 
+use crate::blueprint::LINEWIDTH_BIAS;
+
 #[derive(Debug)]
 pub struct ConfigColors {
     pub main: HashSet<i32>,
@@ -20,9 +22,19 @@ pub struct ConfWindow {
 }
 
 #[derive(Debug)]
+pub struct ConfLineWidths {
+    pub main: f32,
+    pub thick: f32,
+    pub thin: f32,
+    pub error: f32,
+}
+
+#[derive(Debug)]
 pub struct Configuration {
     pub colors: ConfigColors,
     pub window: ConfWindow,
+    pub line_widths: ConfLineWidths,
+    pub error_size: f32,
 }
 
 impl Default for Configuration {
@@ -36,6 +48,13 @@ impl Default for Configuration {
         Configuration {
             colors,
             window: ConfWindow { width: 0, height: 0 },
+            line_widths: ConfLineWidths {
+                main: 2.0 - LINEWIDTH_BIAS,
+                thick: 3.0 - LINEWIDTH_BIAS,
+                thin: 1.0 - LINEWIDTH_BIAS,
+                error: 3.0 - LINEWIDTH_BIAS,
+            },
+            error_size: 15.0,
         }
     }
 }
@@ -90,6 +109,41 @@ impl Configuration {
                 self.window.height = *height as i32;
             }
         }
+
+        //Line widths
+        if let Some(JsonValue::Object(lws)) = file.get("line_widths") {
+            if let Some(width) = lws.get("main")
+                && let JsonValue::Number(width) = width
+            {
+                self.line_widths.main = *width as f32 - LINEWIDTH_BIAS;
+            }
+
+            if let Some(width) = lws.get("thick")
+                && let JsonValue::Number(width) = width
+            {
+                self.line_widths.thick = *width as f32 - LINEWIDTH_BIAS;
+            }
+
+            if let Some(width) = lws.get("thin")
+                && let JsonValue::Number(width) = width
+            {
+                self.line_widths.thin = *width as f32 - LINEWIDTH_BIAS;
+            }
+
+            if let Some(width) = lws.get("error")
+                && let JsonValue::Number(width) = width
+            {
+                self.line_widths.error = *width as f32 - LINEWIDTH_BIAS;
+            }
+        }
+
+        // Errors
+        if let Some(size) = file.get("error_size")
+            && let JsonValue::Number(size) = size
+        {
+            self.error_size = *size as f32 / 2.0;
+        }
+
         Ok(())
     }
 }

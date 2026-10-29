@@ -41,9 +41,7 @@ const DEFAULT_COLORS: [i32; 256] = [
     0x828282, 0xBEBEBE, 0xFFFFFF,
 ];
 
-pub const LINEWIDTH_MAIN: f32 = 1.95;
-pub const LINEWIDTH_THICK: f32 = 2.95;
-pub const LINEWIDTH_OTHER: f32 = 0.95;
+pub const LINEWIDTH_BIAS: f32 = 0.05;
 
 #[derive(Debug, Clone, Copy)]
 pub enum LineType {
@@ -482,11 +480,11 @@ pub fn parse_dxf<'a>(drawing: Drawing) -> anyhow::Result<Blueprint<'a>> {
         let (line_width, order) = match line_type {
             LineType::Main => {
                 open_ends.extend(path.open_ends);
-                (LINEWIDTH_MAIN, 4)
+                (CONFIG.line_widths.main, 4)
             }
-            LineType::Cuts => (LINEWIDTH_THICK, 3),
-            LineType::Marks => (LINEWIDTH_OTHER, 2),
-            LineType::Other => (LINEWIDTH_OTHER, 1),
+            LineType::Cuts => (CONFIG.line_widths.thick, 3),
+            LineType::Marks => (CONFIG.line_widths.thin, 2),
+            LineType::Other => (CONFIG.line_widths.thin, 1),
         };
 
         layers.push(BlueprintLayer {
