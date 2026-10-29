@@ -84,17 +84,32 @@ const BTNIMG_PREV: ButtonImages = ButtonImages {
     disabled: Some(include_bytes!("../assets/buttons/prev_disabled.png")),
 };
 
-const TTIMG: &[&[&[u8]]] = &[&[
-    include_bytes!("../assets/tooltips/en/open.png"),
-    include_bytes!("../assets/tooltips/en/save.png"),
-    include_bytes!("../assets/tooltips/en/zoomin.png"),
-    include_bytes!("../assets/tooltips/en/zoomout.png"),
-    include_bytes!("../assets/tooltips/en/showall.png"),
-    include_bytes!("../assets/tooltips/en/shown.png"),
-    include_bytes!("../assets/tooltips/en/hidden.png"),
-    include_bytes!("../assets/tooltips/en/prev.png"),
-    include_bytes!("../assets/tooltips/en/next.png"),
-]];
+const TTIMG: &[&[&[u8]]] = &[
+    // EN
+    &[
+        include_bytes!("../assets/tooltips/en/open.png"),
+        include_bytes!("../assets/tooltips/en/save.png"),
+        include_bytes!("../assets/tooltips/en/zoomin.png"),
+        include_bytes!("../assets/tooltips/en/zoomout.png"),
+        include_bytes!("../assets/tooltips/en/showall.png"),
+        include_bytes!("../assets/tooltips/en/shown.png"),
+        include_bytes!("../assets/tooltips/en/hidden.png"),
+        include_bytes!("../assets/tooltips/en/prev.png"),
+        include_bytes!("../assets/tooltips/en/next.png"),
+    ],
+    // RU
+    &[
+        include_bytes!("../assets/tooltips/ru/open.png"),
+        include_bytes!("../assets/tooltips/ru/save.png"),
+        include_bytes!("../assets/tooltips/ru/zoomin.png"),
+        include_bytes!("../assets/tooltips/ru/zoomout.png"),
+        include_bytes!("../assets/tooltips/ru/showall.png"),
+        include_bytes!("../assets/tooltips/ru/shown.png"),
+        include_bytes!("../assets/tooltips/ru/hidden.png"),
+        include_bytes!("../assets/tooltips/ru/prev.png"),
+        include_bytes!("../assets/tooltips/ru/next.png"),
+    ],
+];
 
 #[derive(Copy, Clone, PartialEq)]
 enum ButtonState {
@@ -339,7 +354,13 @@ impl Gui {
         height = height.max(btn_next.height);
         btn_next.disable();
 
-        let tooltips: Vec<Pixmap> = TTIMG[0].iter().map(|data| Pixmap::decode_png(data).unwrap()).collect();
+        let tooltips = match t!("tooltips").as_ref() {
+            "en" => TTIMG[0],
+            "ru" => TTIMG[1],
+            _ => TTIMG[0],
+        };
+
+        let tooltips: Vec<Pixmap> = tooltips.iter().map(|data| Pixmap::decode_png(data).unwrap()).collect();
 
         Gui {
             buttons: [

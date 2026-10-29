@@ -1,3 +1,5 @@
+tooltips = "ru"
+
 [open]
 title = "Открыть файл"
 supported = "Все поддерживаемые файлы"

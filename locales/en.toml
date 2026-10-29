@@ -1,3 +1,5 @@
+tooltips = "en"
+
 [open]
 title = "Open file"
 supported = "Supported files"
