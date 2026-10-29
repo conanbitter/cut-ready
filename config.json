@@ -1,0 +1,21 @@
+{
+    "colors": {
+        "main": ["#007FFF", "#0080FF", "#0000FF"],
+        "cuts": ["#008181", "#009696", "#006868"],
+        "marks": 0
+    },
+
+    "window": {
+        "width": 1280,
+        "height": 720
+    },
+
+    "line_widths": {
+        "main": 2,
+        "thick": 3,
+        "thin": 1,
+        "error": 3
+    },
+
+    "error_size": 30.0
+}
