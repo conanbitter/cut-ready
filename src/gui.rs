@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use tiny_skia::{BlendMode, FilterQuality, Pixmap, PixmapPaint, Transform};
 
 pub const GUI_PAINT: PixmapPaint = PixmapPaint {
@@ -249,9 +251,17 @@ pub enum GuiCommand {
     PrevError,
 }
 
+enum TooltipState {
+    Showing,
+    Hidden,
+    FadeIn,
+    FadeOut,
+}
+
 pub struct Gui {
     buttons: [Button; 9],
     pub height: i32,
+    pub timer: Option<Instant>,
 }
 
 impl Gui {
@@ -310,6 +320,7 @@ impl Gui {
                 btn_next,
             ],
             height,
+            timer: None,
         }
     }
 
@@ -408,6 +419,8 @@ impl Gui {
             _ => (),
         }
 
+        self.set_timer(Duration::from_secs(3));
+
         (
             GuiInteractionResult {
                 captured: total_captured,
@@ -454,5 +467,18 @@ impl Gui {
             self.hide_errors(false, x, y);
             false
         }
+    }
+
+    fn set_timer(&mut self, duration: Duration) {
+        self.timer = Some(Instant::now() + duration);
+    }
+
+    pub fn reset_timer(&mut self) {
+        self.timer = None
+    }
+
+    pub fn on_timer(&mut self) -> bool {
+        println!("On timer");
+        false
     }
 }

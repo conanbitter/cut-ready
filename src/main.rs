@@ -4,6 +4,7 @@ use rfd::{AsyncFileDialog, AsyncMessageDialog, MessageButtons, MessageLevel};
 use rust_i18n::set_locale;
 use softbuffer::{Context, Surface};
 use std::fmt::Write;
+use std::time::Instant;
 use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
 use winit::{
     application::ApplicationHandler,
@@ -364,6 +365,27 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 }
             }
             _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(app_state) = self.state.as_mut()
+            && let Some(timer) = app_state.gui.timer
+        {
+            if Instant::now() >= timer {
+                if app_state.gui.on_timer() {
+                    app_state.inker.redraw_needed = true;
+                    app_state.window.request_redraw();
+                }
+
+                app_state.gui.reset_timer();
+
+                event_loop.set_control_flow(ControlFlow::Wait);
+            } else {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(timer));
+            }
+        } else {
+            event_loop.set_control_flow(ControlFlow::Wait);
         }
     }
 
