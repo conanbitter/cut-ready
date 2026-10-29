@@ -72,9 +72,6 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
         }
     }
 
-    #[cfg(all(not(debug_assertions), windows))]
-    attach_console();
-
     /*println!("help {}", help);
     println!("convert {}", convert);
     println!("incl cubdirs {}", include_subdirs);
@@ -82,6 +79,8 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
     println!("output {:?}", output);*/
 
     if help {
+        #[cfg(all(not(debug_assertions), windows))]
+        attach_console();
         println!("{}", CLI_LOGO);
         println!("{}", CLI_USAGE);
         return None;
@@ -96,6 +95,9 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
             return Some(None);
         }
     }
+
+    #[cfg(all(not(debug_assertions), windows))]
+    attach_console();
 
     println!("{}", CLI_LOGO);
 
