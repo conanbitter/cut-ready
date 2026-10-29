@@ -8,6 +8,7 @@ pub struct Inker<'a> {
     pub camera: Camera,
     pub current_blueprint: Blueprint<'a>,
     error_paint: Paint<'a>,
+    pub redraw_needed: bool,
 }
 
 impl<'a> Inker<'a> {
@@ -33,33 +34,39 @@ impl<'a> Inker<'a> {
             camera: Camera::default(),
             current_blueprint: Blueprint::default(),
             error_paint,
+            redraw_needed: true,
         }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.pixmap = Pixmap::new(width, height).unwrap();
         self.camera.resize(width as f32, height as f32);
+        self.redraw_needed = true;
     }
 
     pub fn draw(&mut self, gui: &mut Gui, show_errors: bool) -> &[u8] {
-        //self.pixmap.fill(Color::WHITE);
+        let force = self.redraw_needed;
+        if self.redraw_needed {
+            self.pixmap.fill(Color::WHITE);
 
-        for layer in &self.current_blueprint.layers {
-            self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);
-            self.pixmap
-                .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
-        }
-
-        if show_errors {
-            self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
-            if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
-                self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
+            for layer in &self.current_blueprint.layers {
+                self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);
                 self.pixmap
-                    .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
+                    .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
             }
+
+            if show_errors {
+                self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
+                if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
+                    self.camera.apply_to_stroke(ERROR_LINE_WIDTH, &mut self.stroke);
+                    self.pixmap
+                        .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
+                }
+            }
+            self.redraw_needed = false;
         }
 
-        gui.draw(&mut self.pixmap);
+        gui.draw(&mut self.pixmap, force);
 
         self.pixmap.data()
     }

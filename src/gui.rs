@@ -135,11 +135,11 @@ impl Button {
         }
     }
 
-    fn draw(&mut self, pixmap: &mut Pixmap) {
+    fn draw(&mut self, pixmap: &mut Pixmap, forced: bool) {
         if !self.visible {
             return;
         }
-        if self.redraw_needed {
+        if self.redraw_needed || forced {
             let image = match self.state {
                 ButtonState::Normal => &self.image_normal,
                 ButtonState::Hovered => &self.image_hovered,
@@ -172,7 +172,7 @@ impl Button {
             ButtonState::Hovered | ButtonState::Pressed if !inbound => self.state = ButtonState::Normal,
             _ => (),
         };
-        self.redraw_needed = self.state != old_state;
+        self.redraw_needed = self.redraw_needed || self.state != old_state;
         inbound
     }
 
@@ -186,7 +186,7 @@ impl Button {
             ButtonState::Normal | ButtonState::Hovered if inbound => self.state = ButtonState::Pressed,
             _ => (),
         };
-        self.redraw_needed = self.state != old_state;
+        self.redraw_needed = self.redraw_needed || self.state != old_state;
         inbound
     }
 
@@ -211,7 +211,7 @@ impl Button {
             }
             _ => GuiCommand::None,
         };
-        self.redraw_needed = self.state != old_state;
+        self.redraw_needed = self.redraw_needed || self.state != old_state;
         (inbound, command)
     }
 
@@ -226,12 +226,14 @@ impl Button {
     }
 }
 
+/*
 impl GuiInteractionResult {
     fn append(&mut self, other: GuiInteractionResult) {
         self.captured |= other.captured;
         self.needs_redraw |= other.needs_redraw;
     }
 }
+*/
 
 #[derive(Debug, Clone, Copy)]
 pub enum GuiCommand {
@@ -311,9 +313,9 @@ impl Gui {
         }
     }
 
-    pub fn draw(&mut self, pixmap: &mut Pixmap) {
+    pub fn draw(&mut self, pixmap: &mut Pixmap, forced: bool) {
         for btn in &mut self.buttons {
-            btn.draw(pixmap);
+            btn.draw(pixmap, forced);
         }
     }
 
@@ -362,7 +364,8 @@ impl Gui {
         let mut total_captured = false;
         let mut redraw_needed = false;
         for btn in &mut self.buttons {
-            total_captured = total_captured || btn.mouse_move(x, y);
+            let captured = btn.mouse_move(x, y);
+            total_captured = total_captured || captured;
             redraw_needed = redraw_needed || btn.redraw_needed;
         }
         GuiInteractionResult {
@@ -375,7 +378,8 @@ impl Gui {
         let mut total_captured = false;
         let mut redraw_needed = false;
         for btn in &mut self.buttons {
-            total_captured = total_captured || btn.mouse_press(x, y);
+            let captured = btn.mouse_press(x, y);
+            total_captured = total_captured || captured;
             redraw_needed = redraw_needed || btn.redraw_needed;
         }
         GuiInteractionResult {
@@ -411,6 +415,21 @@ impl Gui {
             },
             res_command,
         )
+    }
+
+    pub fn mouse_leaved(&mut self) -> bool {
+        let mut redraw_needed = false;
+        for btn in &mut self.buttons {
+            match btn.state {
+                ButtonState::Hovered | ButtonState::Pressed => {
+                    btn.state = ButtonState::Normal;
+                    btn.redraw_needed = true;
+                    redraw_needed = true;
+                }
+                _ => (),
+            }
+        }
+        redraw_needed
     }
 
     pub fn enable_saving(&mut self) {

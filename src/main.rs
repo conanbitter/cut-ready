@@ -125,7 +125,6 @@ impl<'a> AppState<'a> {
             self.gui.disable_saving();
             load_dxf(path.clone())
         };
-        //println!("{}", path.extension().unwrap().display());
         match readed {
             Ok(blueprint) => {
                 if blueprint.errors.path.is_none() {
@@ -142,6 +141,7 @@ impl<'a> AppState<'a> {
                     self.current_filename = Some(path.clone());
                 }
 
+                self.inker.redraw_needed = true;
                 self.window.request_redraw();
             }
             Err(err) => {
@@ -175,27 +175,34 @@ impl<'a> AppState<'a> {
                 self.inker
                     .camera
                     .scale(1.0 / 0.9, width as f32 / 2.0, height as f32 / 2.0);
+                self.inker.redraw_needed = true;
             }
             GuiCommand::ZoomOut => {
                 let PhysicalSize { width, height } = self.window.inner_size();
                 self.inker.camera.scale(0.9, width as f32 / 2.0, height as f32 / 2.0);
+                self.inker.redraw_needed = true;
             }
             GuiCommand::ShowAll => {
                 self.inker.show_all();
+                self.inker.redraw_needed = true;
             }
             GuiCommand::ShowErrors => {
                 self.show_errors = true;
+                self.inker.redraw_needed = true;
             }
             GuiCommand::HideErrors => {
                 self.show_errors = false;
+                self.inker.redraw_needed = true;
             }
             GuiCommand::NextError => {
                 let point = self.inker.current_blueprint.errors.next_error();
                 self.inker.camera.move_to(point);
+                self.inker.redraw_needed = true;
             }
             GuiCommand::PrevError => {
                 let point = self.inker.current_blueprint.errors.prev_error();
                 self.inker.camera.move_to(point);
+                self.inker.redraw_needed = true;
             }
         }
     }
@@ -395,9 +402,16 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         app_state.old_x = position.x;
                         app_state.old_y = position.y;
                         needs_redraw = true;
+                        app_state.inker.redraw_needed = true;
                     }
                 }
                 if needs_redraw {
+                    app_state.window.request_redraw();
+                }
+            }
+
+            WindowEvent::CursorLeft { device_id: _ } => {
+                if app_state.gui.mouse_leaved() {
                     app_state.window.request_redraw();
                 }
             }
@@ -413,6 +427,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         .inker
                         .camera
                         .scale(factor, app_state.mouse_x as f32, app_state.mouse_y as f32);
+                    app_state.inker.redraw_needed = true;
                     app_state.window.request_redraw();
                 }
                 winit::event::MouseScrollDelta::PixelDelta(_) => (),
@@ -466,6 +481,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             app_state.show_errors = app_state
                                 .gui
                                 .toggle_errors(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                            app_state.inker.redraw_needed = true;
                             app_state.window.request_redraw();
                         }
                         _ => (),
