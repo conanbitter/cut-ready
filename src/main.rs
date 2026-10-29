@@ -465,49 +465,53 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 is_synthetic: _,
             } => {
                 if event.state.is_pressed()
-                    && !event.repeat
                     && let PhysicalKey::Code(code) = event.physical_key
                 {
+                    if !event.repeat {
+                        match code {
+                            KeyCode::ControlLeft | KeyCode::ControlRight => app_state.ctrl_pressed = true,
+                            KeyCode::ArrowRight => {
+                                if app_state.show_errors {
+                                    app_state.command(GuiCommand::NextError);
+                                    app_state.window.request_redraw();
+                                }
+                            }
+                            KeyCode::ArrowLeft => {
+                                if app_state.show_errors {
+                                    app_state.command(GuiCommand::PrevError);
+                                    app_state.window.request_redraw();
+                                }
+                            }
+                            KeyCode::KeyL if app_state.ctrl_pressed => {
+                                app_state.color_hint();
+                            }
+                            KeyCode::KeyA if app_state.ctrl_pressed => {
+                                app_state.command(GuiCommand::ShowAll);
+                                app_state.window.request_redraw();
+                            }
+                            KeyCode::KeyO if app_state.ctrl_pressed => {
+                                app_state.command(GuiCommand::Open);
+                            }
+                            KeyCode::KeyS if app_state.ctrl_pressed && app_state.current_filename.is_some() => {
+                                app_state.command(GuiCommand::Save);
+                            }
+                            KeyCode::KeyE if app_state.ctrl_pressed => {
+                                app_state.show_errors = app_state
+                                    .gui
+                                    .toggle_errors(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                                app_state.inker.redraw_needed = true;
+                                app_state.window.request_redraw();
+                            }
+                            _ => (),
+                        }
+                    }
                     match code {
-                        KeyCode::ControlLeft | KeyCode::ControlRight => app_state.ctrl_pressed = true,
-                        KeyCode::ArrowRight => {
-                            if app_state.show_errors {
-                                app_state.command(GuiCommand::NextError);
-                                app_state.window.request_redraw();
-                            }
-                        }
-                        KeyCode::ArrowLeft => {
-                            if app_state.show_errors {
-                                app_state.command(GuiCommand::PrevError);
-                                app_state.window.request_redraw();
-                            }
-                        }
                         KeyCode::Equal => {
                             app_state.command(GuiCommand::ZoomIn);
                             app_state.window.request_redraw();
                         }
                         KeyCode::Minus => {
                             app_state.command(GuiCommand::ZoomOut);
-                            app_state.window.request_redraw();
-                        }
-                        KeyCode::KeyL if app_state.ctrl_pressed => {
-                            app_state.color_hint();
-                        }
-                        KeyCode::KeyA if app_state.ctrl_pressed => {
-                            app_state.command(GuiCommand::ShowAll);
-                            app_state.window.request_redraw();
-                        }
-                        KeyCode::KeyO if app_state.ctrl_pressed => {
-                            app_state.command(GuiCommand::Open);
-                        }
-                        KeyCode::KeyS if app_state.ctrl_pressed && app_state.current_filename.is_some() => {
-                            app_state.command(GuiCommand::Save);
-                        }
-                        KeyCode::KeyE if app_state.ctrl_pressed => {
-                            app_state.show_errors = app_state
-                                .gui
-                                .toggle_errors(app_state.mouse_x as i32, app_state.mouse_y as i32);
-                            app_state.inker.redraw_needed = true;
                             app_state.window.request_redraw();
                         }
                         _ => (),
