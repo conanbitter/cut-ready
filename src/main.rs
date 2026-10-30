@@ -219,7 +219,7 @@ impl<'a> AppState<'a> {
         let mut buffer = String::new();
         let _ = writeln!(buffer, "{}:\n", t!("colorhint.descr"));
 
-        for layer in &self.inker.current_blueprint.layers {
+        for layer in self.inker.current_blueprint.layers.iter().rev() {
             let layer_type = match layer.hint_type {
                 blueprint::LineType::Main => t!("colorhint.main"),
                 blueprint::LineType::Cuts => t!("colorhint.cuts"),
