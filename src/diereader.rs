@@ -171,7 +171,7 @@ pub fn new_layer<'a>(
     let b = (color & 0xFF) as u8;
     let mut paint = tiny_skia::Paint::default();
     paint.set_color_rgba8(r, g, b, 255);
-    paint.anti_alias = true;
+    paint.anti_alias = CONFIG.anti_aliasing;
 
     BlueprintLayer {
         drawing: path,

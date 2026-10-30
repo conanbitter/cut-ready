@@ -36,6 +36,7 @@ pub struct Configuration {
     pub line_widths: ConfLineWidths,
     pub error_size: f32,
     pub language: Option<String>,
+    pub anti_aliasing: bool,
 }
 
 impl Default for Configuration {
@@ -57,6 +58,7 @@ impl Default for Configuration {
             },
             error_size: 15.0,
             language: None,
+            anti_aliasing: true,
         }
     }
 }
@@ -152,6 +154,13 @@ impl Configuration {
             && lang != "auto"
         {
             self.language = Some(lang.to_owned());
+        }
+
+        // Anti-aliasing
+        if let Some(aa) = file.get("anti_aliasing")
+            && let JsonValue::Boolean(aa) = aa
+        {
+            self.anti_aliasing = *aa;
         }
 
         Ok(())

@@ -23,7 +23,7 @@ impl<'a> Inker<'a> {
         };
 
         let error_paint = Paint {
-            anti_alias: true,
+            anti_alias: CONFIG.anti_aliasing,
             shader: tiny_skia::Shader::SolidColor(Color::from_rgba8(255, 0, 0, 255)),
             ..Paint::default()
         };

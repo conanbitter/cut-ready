@@ -17,6 +17,8 @@
         "error": 3
     },
 
+    "anti_aliasing": true,
+
     "error_size": 30.0,
 
     "language": "auto"
