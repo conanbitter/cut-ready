@@ -3,11 +3,12 @@ use dxf::{
     entities::{Entity, EntityType},
 };
 use std::{collections::HashMap, f64::consts::TAU, io::Cursor, path::Path, vec};
-use tiny_skia::{PathBuilder, Rect, Transform};
+use tiny_skia::{PathBuilder, Transform};
 
 use crate::{
     config::CONFIG,
     curves::curve_path,
+    errors::default_rect,
     geometry::{EPSILON64, Point2D},
     pointerrors::{PointErrors, collect_errors},
 };
@@ -90,7 +91,7 @@ impl DrawingLayers {
 
     fn request_path(&mut self, color: i32) -> &mut DrawingLayer {
         self.0.entry(color).or_default();
-        self.0.get_mut(&color).unwrap()
+        self.0.get_mut(&color).unwrap() // existence of the entry is ensured by the previous line
     }
 }
 
@@ -110,7 +111,7 @@ impl<'a> Default for Blueprint<'a> {
     fn default() -> Self {
         Self {
             layers: Default::default(),
-            bounds: Rect::from_xywh(0.0, 0.0, 0.0, 0.0).unwrap(),
+            bounds: default_rect(),
             errors: Default::default(),
         }
     }
@@ -331,7 +332,7 @@ where
                             line.line_to(p2.x as f32, -p2.y as f32);
                         }
                     }
-                    let p1 = polyline.vertices.last().unwrap();
+                    let p1 = polyline.vertices.last().unwrap(); // polyline have at least one entry
                     let p2 = polyline.vertices.first().unwrap();
                     if polyline.flags & 1 > 0 {
                         // Closed polyline
@@ -361,9 +362,9 @@ where
 
             EntityType::Spline(ref spline) => {
                 pb.push_path(&curve_path(spline)?);
-                if spline.flags & 1 == 0 {
+                if spline.control_points.len() > 1 && spline.flags & 1 == 0 {
                     //Open spline
-                    let p1 = spline.control_points.first().unwrap();
+                    let p1 = spline.control_points.first().unwrap(); // spline have at least 2 points
                     let p2 = spline.control_points.last().unwrap();
                     let start_point = Point2D::new(p1.x as f32, -p1.y as f32);
                     let end_point = Point2D::new(p2.x as f32, -p2.y as f32);
@@ -444,7 +445,7 @@ pub fn decode_dxf<'a>(data: &[u8]) -> anyhow::Result<Blueprint<'a>> {
 pub fn parse_dxf<'a>(drawing: Drawing) -> anyhow::Result<Blueprint<'a>> {
     let layer_colors: HashMap<String, i32> = drawing
         .layers()
-        .map(|l| (l.name.clone(), DEFAULT_COLORS[l.color.index().unwrap() as usize]))
+        .map(|l| (l.name.clone(), DEFAULT_COLORS[l.color.index().unwrap_or(7) as usize]))
         .collect();
 
     let mut blocks = HashMap::new();

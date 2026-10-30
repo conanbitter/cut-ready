@@ -47,7 +47,7 @@ impl PointErrors {
         {
             let mut pb = path.clear();
             PointErrors::draw(&self.points, &mut pb, new_scale);
-            self.path = Some(pb.finish().unwrap());
+            self.path = pb.finish();
             self.old_scale = new_scale;
         }
     }

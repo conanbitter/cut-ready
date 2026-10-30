@@ -1,6 +1,6 @@
 use tiny_skia::{Color, LineCap, LineJoin, Paint, Pixmap, Stroke};
 
-use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, gui::Gui};
+use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, gui::Gui};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
@@ -12,8 +12,8 @@ pub struct Inker<'a> {
 }
 
 impl<'a> Inker<'a> {
-    pub fn new() -> Inker<'a> {
-        let pixmap = Pixmap::new(256, 256).unwrap();
+    pub fn new() -> anyhow::Result<Inker<'a>> {
+        let pixmap = Pixmap::new(256, 256).ok_or(AppError::InkerNew)?;
 
         let stroke = Stroke {
             width: 5.0,
@@ -28,20 +28,22 @@ impl<'a> Inker<'a> {
             ..Paint::default()
         };
 
-        Inker {
+        Ok(Inker {
             pixmap,
             stroke,
             camera: Camera::default(),
             current_blueprint: Blueprint::default(),
             error_paint,
             redraw_needed: true,
-        }
+        })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        self.pixmap = Pixmap::new(width, height).unwrap();
-        self.camera.resize(width as f32, height as f32);
-        self.redraw_needed = true;
+        if let Some(new_pixmap) = Pixmap::new(width, height) {
+            self.pixmap = new_pixmap;
+            self.camera.resize(width as f32, height as f32);
+            self.redraw_needed = true;
+        }
     }
 
     pub fn draw(&mut self, gui: &mut Gui, show_errors: bool) -> &[u8] {

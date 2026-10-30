@@ -18,6 +18,7 @@ use winit::{
 
 use crate::batchconv::try_batch_convert;
 use crate::config::{CONFIG, ConfWindow};
+use crate::errors::AppError;
 use crate::{
     blueprint::{decode_dxf, load_dxf},
     diereader::{convert_die, load_die},
@@ -35,6 +36,7 @@ mod camera;
 mod config;
 mod curves;
 mod diereader;
+mod errors;
 mod geometry;
 mod gui;
 mod inker;
@@ -113,10 +115,23 @@ impl<'a> AppState<'a> {
         });
     }
 
+    fn message_box_alone(title: &str, message: &str, message_type: MessageLevel) {
+        let dialog = AsyncMessageDialog::new()
+            .set_title(title)
+            .set_description(message)
+            .set_level(message_type)
+            .set_buttons(MessageButtons::Ok)
+            .show();
+
+        std::thread::spawn(move || {
+            futures::executor::block_on(dialog);
+        });
+    }
+
     fn open_file(&mut self, path: PathBuf, is_splash: bool) {
-        if !is_splash {
+        if !is_splash && let Some(filename) = path.file_name() {
             self.window
-                .set_title(format!("{} - Cut Ready", path.file_name().unwrap().display()).as_str());
+                .set_title(format!("{} - Cut Ready", filename.display()).as_str());
         }
 
         let mut can_save = false;
@@ -237,6 +252,24 @@ impl<'a> AppState<'a> {
 
         self.message_box(&t!("colorhint.title"), &buffer, MessageLevel::Info);
     }
+
+    fn draw(&mut self) -> anyhow::Result<()> {
+        let data = self.inker.draw(&mut self.gui, self.show_errors);
+
+        let mut buffer = self.surface.buffer_mut().map_err(|_| AppError::SurfaceDraw)?;
+
+        for (out_pixel, in_pixel) in buffer.iter_mut().zip(data.as_chunks::<4>().0) {
+            let red = in_pixel[0] as u32;
+            let green = in_pixel[1] as u32;
+            let blue = in_pixel[2] as u32;
+
+            *out_pixel = blue | (green << 8) | (red << 16);
+        }
+
+        buffer.present().map_err(|_| AppError::SurfaceDraw)?;
+
+        Ok(())
+    }
 }
 
 struct App<'a> {
@@ -246,87 +279,100 @@ struct App<'a> {
     start_file: Option<PathBuf>,
 }
 
+impl<'a> App<'a> {
+    fn new_window<'b>(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<AppState<'b>> {
+        let mut window_size = CONFIG.window;
+        if window_size.width == 0 || window_size.height == 0 {
+            if let Some(monitor) = event_loop
+                .primary_monitor()
+                .or_else(|| event_loop.available_monitors().next())
+            {
+                window_size.width = (monitor.size().width as f32 * 2.0 / 3.0) as i32;
+                window_size.height = (monitor.size().height as f32 * 2.0 / 3.0) as i32;
+            } else {
+                window_size = ConfWindow {
+                    width: 1280,
+                    height: 720,
+                };
+            }
+        }
+
+        let attributes = Window::default_attributes()
+            .with_title("Cut Ready")
+            .with_window_icon(Icon::from_resource(1, None).ok())
+            .with_inner_size(PhysicalSize::new(window_size.width, window_size.height))
+            .with_visible(false);
+
+        let window = event_loop.create_window(attributes)?;
+
+        let target_monitor = window.current_monitor().or_else(|| window.available_monitors().next());
+
+        if let Some(monitor) = target_monitor {
+            let monitor_size = monitor.size();
+            let window_size = window.outer_size();
+
+            let x = (monitor_size.width.saturating_sub(window_size.width) / 2) as i32;
+            let y = (monitor_size.height.saturating_sub(window_size.height) / 2) as i32;
+
+            let monitor_pos = monitor.position();
+            let centered_pos = PhysicalPosition::new(x + monitor_pos.x, y + monitor_pos.y);
+
+            window.set_outer_position(centered_pos);
+        }
+
+        window.set_visible(true);
+        let window_size = window.inner_size();
+        let window_rc = Rc::new(window);
+
+        let mut surface = Surface::new(&self.context, window_rc.clone()).map_err(|_| AppError::SurfaceNew)?;
+        if let (Some(width), Some(height)) = (NonZeroU32::new(window_size.width), NonZeroU32::new(window_size.height)) {
+            surface
+                .resize(width, height)
+                .map_err(|_| AppError::SurfaceResize(width, height))?;
+        }
+
+        let gui = Gui::new(2, 2)?;
+        let top_height = (2 + gui.height) as f32;
+
+        let mut inker = Inker::new()?;
+        let PhysicalSize {
+            width: inner_width,
+            height: inner_height,
+        } = window_rc.inner_size();
+        inker
+            .camera
+            .set_viewport(inner_width as f32, inner_height as f32, top_height);
+        inker.show_all();
+
+        Ok(AppState {
+            window: window_rc,
+            surface,
+            inker,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            old_x: 0.0,
+            old_y: 0.0,
+            drag: false,
+            gui,
+            show_errors: false,
+            event_proxy: self.proxy.clone(),
+            current_filename: None,
+            ctrl_pressed: false,
+        })
+    }
+}
+
 impl<'a> ApplicationHandler<UserEvent> for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
-            let mut window_size = CONFIG.window;
-            if window_size.width == 0 || window_size.height == 0 {
-                if let Some(monitor) = event_loop
-                    .primary_monitor()
-                    .or_else(|| event_loop.available_monitors().next())
-                {
-                    window_size.width = (monitor.size().width as f32 * 2.0 / 3.0) as i32;
-                    window_size.height = (monitor.size().height as f32 * 2.0 / 3.0) as i32;
-                } else {
-                    window_size = ConfWindow {
-                        width: 1280,
-                        height: 720,
-                    };
-                }
+            match self.new_window(event_loop) {
+                Ok(state) => self.state = Some(state),
+                Err(err) => AppState::message_box_alone(
+                    &t!("wnderror.title"),
+                    format!("{}:\n{}", t!("wnderror.text"), err).as_str(),
+                    MessageLevel::Error,
+                ),
             }
-
-            let attributes = Window::default_attributes()
-                .with_title("Cut Ready")
-                .with_window_icon(Icon::from_resource(1, None).ok())
-                .with_inner_size(PhysicalSize::new(window_size.width, window_size.height))
-                .with_visible(false);
-
-            let window = event_loop.create_window(attributes).unwrap();
-
-            let target_monitor = window.current_monitor().or_else(|| window.available_monitors().next());
-
-            if let Some(monitor) = target_monitor {
-                let monitor_size = monitor.size();
-                let window_size = window.outer_size();
-
-                let x = (monitor_size.width.saturating_sub(window_size.width) / 2) as i32;
-                let y = (monitor_size.height.saturating_sub(window_size.height) / 2) as i32;
-
-                let monitor_pos = monitor.position();
-                let centered_pos = PhysicalPosition::new(x + monitor_pos.x, y + monitor_pos.y);
-
-                window.set_outer_position(centered_pos);
-            }
-
-            window.set_visible(true);
-            let window_size = window.inner_size();
-            let window_rc = Rc::new(window);
-
-            let mut surface = Surface::new(&self.context, window_rc.clone()).expect("failed creating surface");
-            if let (Some(width), Some(height)) =
-                (NonZeroU32::new(window_size.width), NonZeroU32::new(window_size.height))
-            {
-                surface.resize(width, height).unwrap();
-            }
-
-            let gui = Gui::new(2, 2);
-            let top_height = (2 + gui.height) as f32;
-
-            let mut inker = Inker::new();
-            let PhysicalSize {
-                width: inner_width,
-                height: inner_height,
-            } = window_rc.inner_size();
-            inker
-                .camera
-                .set_viewport(inner_width as f32, inner_height as f32, top_height);
-            inker.show_all();
-
-            self.state = Some(AppState {
-                window: window_rc,
-                surface,
-                inker,
-                mouse_x: 0.0,
-                mouse_y: 0.0,
-                old_x: 0.0,
-                old_y: 0.0,
-                drag: false,
-                gui,
-                show_errors: false,
-                event_proxy: self.proxy.clone(),
-                current_filename: None,
-                ctrl_pressed: false,
-            });
 
             if let Some(state) = self.state.as_mut() {
                 if let Some(start_file) = self.start_file.take() {
@@ -403,8 +449,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             }
 
             WindowEvent::Resized(size) => {
-                if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height)) {
-                    app_state.surface.resize(width, height).unwrap();
+                if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
+                    && app_state.surface.resize(width, height).is_ok()
+                {
                     app_state.inker.resize(size.width, size.height);
                 }
             }
@@ -578,19 +625,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             }
 
             WindowEvent::RedrawRequested => {
-                let data = app_state.inker.draw(&mut app_state.gui, app_state.show_errors);
-
-                let mut buffer = app_state.surface.buffer_mut().unwrap();
-
-                for (out_pixel, in_pixel) in buffer.iter_mut().zip(data.as_chunks::<4>().0) {
-                    let red = in_pixel[0] as u32;
-                    let green = in_pixel[1] as u32;
-                    let blue = in_pixel[2] as u32;
-
-                    *out_pixel = blue | (green << 8) | (red << 16);
-                }
-
-                buffer.present().unwrap();
+                let _ = app_state.draw();
             }
             _ => (),
         }
@@ -610,7 +645,10 @@ fn main() -> anyhow::Result<()> {
     };
     let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
-    let context = Context::new(event_loop.owned_display_handle()).unwrap();
+    let Ok(context) = Context::new(event_loop.owned_display_handle()) else {
+        AppState::message_box_alone(&t!("ctxerror.title"), &t!("ctxerror.text"), MessageLevel::Error);
+        return Ok(());
+    };
     let proxy = event_loop.create_proxy();
 
     let mut app = App {

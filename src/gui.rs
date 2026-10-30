@@ -149,17 +149,17 @@ pub struct GuiInteractionResult {
 }
 
 impl Button {
-    fn new(x: i32, y: i32, images: &ButtonImages, command: GuiCommand, visible: bool) -> Button {
-        let image_normal = Pixmap::decode_png(images.normal).unwrap();
-        let image_hovered = Pixmap::decode_png(images.hovered).unwrap();
-        let image_pressed = Pixmap::decode_png(images.pressed).unwrap();
+    fn new(x: i32, y: i32, images: &ButtonImages, command: GuiCommand, visible: bool) -> anyhow::Result<Button> {
+        let image_normal = Pixmap::decode_png(images.normal)?;
+        let image_hovered = Pixmap::decode_png(images.hovered)?;
+        let image_pressed = Pixmap::decode_png(images.pressed)?;
         let image_disabled = match images.disabled {
             Some(image) => Pixmap::decode_png(image).ok(),
             None => None,
         };
         let width = image_normal.width() as i32;
         let height = image_normal.height() as i32;
-        Button {
+        Ok(Button {
             x,
             y,
             width,
@@ -172,7 +172,7 @@ impl Button {
             visible,
             command,
             redraw_needed: true,
-        }
+        })
     }
 
     fn draw(&mut self, pixmap: &mut Pixmap, forced: bool) {
@@ -312,45 +312,45 @@ pub struct Gui {
 }
 
 impl Gui {
-    pub fn new(x: i32, y: i32) -> Gui {
+    pub fn new(x: i32, y: i32) -> anyhow::Result<Gui> {
         let mut curx = x;
         let mut height = 0;
 
-        let btn_open = Button::new(curx, y, &BTNIMG_OPEN, GuiCommand::Open, true);
+        let btn_open = Button::new(curx, y, &BTNIMG_OPEN, GuiCommand::Open, true)?;
         curx += btn_open.width + BUTTON_SPACING;
         height = height.max(btn_open.height);
 
-        let mut btn_save = Button::new(curx, y, &BTNIMG_SAVE, GuiCommand::Save, true);
+        let mut btn_save = Button::new(curx, y, &BTNIMG_SAVE, GuiCommand::Save, true)?;
         curx += btn_save.width + BUTTON_WIDE_SPACING;
         btn_save.disable();
         height = height.max(btn_save.height);
 
-        let btn_zoomin = Button::new(curx, y, &BTNIMG_ZOOMIN, GuiCommand::ZoomIn, true);
+        let btn_zoomin = Button::new(curx, y, &BTNIMG_ZOOMIN, GuiCommand::ZoomIn, true)?;
         curx += btn_zoomin.width + BUTTON_SPACING;
         height = height.max(btn_zoomin.height);
 
-        let btn_zoomout = Button::new(curx, y, &BTNIMG_ZOOMOUT, GuiCommand::ZoomOut, true);
+        let btn_zoomout = Button::new(curx, y, &BTNIMG_ZOOMOUT, GuiCommand::ZoomOut, true)?;
         curx += btn_zoomout.width + BUTTON_SPACING;
         height = height.max(btn_zoomout.height);
 
-        let btn_showall = Button::new(curx, y, &BTNIMG_SHOWALL, GuiCommand::ShowAll, true);
+        let btn_showall = Button::new(curx, y, &BTNIMG_SHOWALL, GuiCommand::ShowAll, true)?;
         curx += btn_showall.width + BUTTON_WIDE_SPACING;
         height = height.max(btn_showall.height);
 
-        let btn_shown = Button::new(curx, y, &BTNIMG_SHOWN, GuiCommand::HideErrors, false);
+        let btn_shown = Button::new(curx, y, &BTNIMG_SHOWN, GuiCommand::HideErrors, false)?;
         height = height.max(btn_shown.height);
 
-        let mut btn_hidden = Button::new(curx, y, &BTNIMG_HIDDEN, GuiCommand::ShowErrors, true);
+        let mut btn_hidden = Button::new(curx, y, &BTNIMG_HIDDEN, GuiCommand::ShowErrors, true)?;
         curx += btn_shown.width + BUTTON_SPACING;
         btn_hidden.disable();
         height = height.max(btn_hidden.height);
 
-        let mut btn_prev = Button::new(curx, y, &BTNIMG_PREV, GuiCommand::PrevError, true);
+        let mut btn_prev = Button::new(curx, y, &BTNIMG_PREV, GuiCommand::PrevError, true)?;
         curx += btn_prev.width + BUTTON_SPACING;
         btn_prev.disable();
         height = height.max(btn_prev.height);
 
-        let mut btn_next = Button::new(curx, y, &BTNIMG_NEXT, GuiCommand::NextError, true);
+        let mut btn_next = Button::new(curx, y, &BTNIMG_NEXT, GuiCommand::NextError, true)?;
         height = height.max(btn_next.height);
         btn_next.disable();
 
@@ -360,9 +360,12 @@ impl Gui {
             _ => TTIMG[0],
         };
 
-        let tooltips: Vec<Pixmap> = tooltips.iter().map(|data| Pixmap::decode_png(data).unwrap()).collect();
+        let tooltips: Vec<Pixmap> = tooltips
+            .iter()
+            .map(|data| Pixmap::decode_png(data).map_err(|e| e.into()))
+            .collect::<anyhow::Result<Vec<Pixmap>>>()?;
 
-        Gui {
+        Ok(Gui {
             buttons: [
                 btn_open,
                 btn_save,
@@ -381,7 +384,7 @@ impl Gui {
             tooltips,
             tooltip_x: 0,
             tooltip_y: 0,
-        }
+        })
     }
 
     pub fn draw(&mut self, pixmap: &mut Pixmap, forced: bool) {

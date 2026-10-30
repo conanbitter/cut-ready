@@ -41,6 +41,14 @@ Options:
 title = "File error"
 text = "Error opening file"
 
+[wnderror]
+title = "Window error"
+text = "Error creating window"
+
+[ctxerror]
+title = "Context error"
+text = "Error creating drawing context"
+
 [colorhint]
 title = "Colors"
 descr = "Line colors"

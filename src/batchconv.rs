@@ -112,10 +112,12 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
 }
 
 fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::Result<()> {
-    if input.is_file() {
+    if input.is_file()
+        && let Some(filename) = input.file_name()
+    {
         let output = if let Some(output) = output {
             if is_dir(&output) {
-                output.join(input.file_name().unwrap()).with_extension("die")
+                output.join(filename).with_extension("die")
             } else {
                 output
             }

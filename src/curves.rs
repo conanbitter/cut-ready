@@ -2,7 +2,10 @@ use dxf::entities::Spline;
 use enterpolation::{Curve, Signal, bspline::BSpline};
 use tiny_skia::PathBuilder;
 
-use crate::geometry::{EPSILON, Point2D};
+use crate::{
+    errors::finish_path,
+    geometry::{EPSILON, Point2D},
+};
 
 const MAX_DEPTH: usize = 100;
 const LINEAR_TOLERANCE: f32 = 0.01;
@@ -119,5 +122,5 @@ pub fn curve_path(dxf_spline: &Spline) -> anyhow::Result<tiny_skia::Path> {
 
         linear_segmentation(&curve, &mut pb, &knots);
     }
-    Ok(pb.finish().unwrap())
+    finish_path(pb)
 }

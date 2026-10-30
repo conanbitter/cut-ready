@@ -14,6 +14,7 @@ use tiny_skia::{PathBuilder, Rect};
 use crate::{
     blueprint::{self, Blueprint, BlueprintLayer, arc_draw},
     config::CONFIG,
+    errors::default_rect,
     geometry::{EPSILON, Point2D},
     pointerrors::PointErrors,
 };
@@ -203,9 +204,9 @@ fn arc_draw_by_points(center: Point2D, start: Point2D, end: Point2D, direction: 
     }
 }
 
-fn parse_lines(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
+fn parse_lines(file: &mut DieFile, pb: &mut PathBuilder) -> Option<Rect> {
     let DieCommand::NumOfSign(count) = file.command else {
-        return Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap();
+        return None;
     };
 
     let mut minx = f32::MAX;
@@ -250,7 +251,7 @@ fn parse_lines(file: &mut DieFile, pb: &mut PathBuilder) -> Rect {
         file.next();
     }
 
-    Rect::from_ltrb(minx, miny, maxx, maxy).unwrap()
+    Rect::from_ltrb(minx, miny, maxx, maxy)
 }
 
 fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> anyhow::Result<Rect> {
@@ -364,15 +365,15 @@ fn parse_contour(file: &mut DieFile, pb: &mut PathBuilder, outer: bool) -> anyho
 
         Rect::from_ltrb(minx, miny, maxx, maxy).ok_or(anyhow::anyhow!("Wrong bounds"))
     } else {
-        Ok(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap())
+        Ok(default_rect())
     }
 }
 
-fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> anyhow::Result<Rect> {
+fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> anyhow::Result<Option<Rect>> {
     let mut bounds: Option<Rect> = None;
 
     let DieCommand::NumOfCuts(count) = file.command else {
-        return Ok(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap());
+        return Ok(None);
     };
     file.next();
 
@@ -394,7 +395,7 @@ fn parse_cuts(file: &mut DieFile, pb: &mut PathBuilder) -> anyhow::Result<Rect> 
         }
     }
 
-    Ok(bounds.unwrap_or(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap()))
+    Ok(bounds)
 }
 
 pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>> {
@@ -412,10 +413,12 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
             DieCommand::EndOfFile => break,
             DieCommand::NumOfSign(_) => {
                 let new_bounds = parse_lines(&mut file, &mut marks_pb);
-                if let Some(total_bounds) = bounds.as_mut() {
-                    total_bounds.join(&new_bounds);
-                } else {
-                    bounds = Some(new_bounds)
+                if let Some(new_bounds) = new_bounds {
+                    if let Some(total_bounds) = bounds.as_mut() {
+                        total_bounds.join(&new_bounds);
+                    } else {
+                        bounds = Some(new_bounds)
+                    }
                 }
             }
             DieCommand::NumOfPoints(true, _) => {
@@ -428,10 +431,12 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
             }
             DieCommand::NumOfCuts(_) => {
                 let new_bounds = parse_cuts(&mut file, &mut cuts_pb)?;
-                if let Some(total_bounds) = bounds.as_mut() {
-                    total_bounds.join(&new_bounds);
-                } else {
-                    bounds = Some(new_bounds)
+                if let Some(new_bounds) = new_bounds {
+                    if let Some(total_bounds) = bounds.as_mut() {
+                        total_bounds.join(&new_bounds);
+                    } else {
+                        bounds = Some(new_bounds)
+                    }
                 }
             }
             _ => file.next(),
@@ -467,7 +472,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
 
     Ok(Blueprint {
         layers,
-        bounds: bounds.unwrap_or(Rect::from_xywh(0.0, 0.0, 1.0, 1.0).unwrap()),
+        bounds: bounds.unwrap_or(default_rect()),
         errors: PointErrors::default(),
     })
 }
@@ -564,6 +569,7 @@ fn conv_polyline(drawing: &mut Drawing, vertices: &[ConvVertex], line_type: blue
 
     let mut vert_iter = vertices.iter();
 
+    // vertices length is at least 2
     let closed = if vertices[0].point.dist2(vertices.last().unwrap().point) < EPSILON {
         vert_iter.next_back();
         true
