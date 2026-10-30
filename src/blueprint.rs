@@ -8,7 +8,7 @@ use tiny_skia::{PathBuilder, Transform};
 use crate::{
     config::CONFIG,
     curves::curve_path,
-    errors::default_rect,
+    errors::{default_rect, finish_path},
     geometry::{EPSILON64, Point2D},
     pointerrors::{PointErrors, collect_errors},
 };
@@ -174,7 +174,7 @@ fn arc_path(cx: f32, cy: f32, r: f32, start_angle: f32, end_angle: f32) -> anyho
         end_angle + std::f32::consts::TAU - start_angle
     };
     arc_draw(cx, cy, r, start_angle, sweep_angle, true, &mut pb);
-    pb.finish().ok_or(anyhow::anyhow!("Path is empty"))
+    finish_path(pb)
 }
 
 fn bulge_draw(x1: f32, y1: f32, x2: f32, y2: f32, bulge: f32, builder: &mut PathBuilder) {
@@ -350,7 +350,7 @@ where
                         }
                     }
 
-                    pb.push_path(&line.finish().ok_or(anyhow::anyhow!("Path is empty"))?);
+                    pb.push_path(&finish_path(line)?);
 
                     if polyline.flags & 1 == 0 {
                         // Open polyline
