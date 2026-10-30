@@ -556,15 +556,11 @@ fn conv_line(drawing: &mut Drawing, p1: Point2D, p2: Point2D, line_type: bluepri
 
 fn conv_polyline(drawing: &mut Drawing, vertices: &[ConvVertex], line_type: blueprint::LineType) {
     if vertices.len() < 2 {
-        //println!("Empty polyline");
         return;
     } else if vertices.len() == 2 {
-        //println!("Polyline is line");
         conv_line(drawing, vertices[0].point, vertices[1].point, line_type);
         return;
     }
-
-    //println!("Proper polyline");
 
     let mut vert_iter = vertices.iter();
 

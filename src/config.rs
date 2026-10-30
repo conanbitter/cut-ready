@@ -67,9 +67,6 @@ impl Configuration {
     fn new() -> Configuration {
         let mut config = Configuration::default();
         let _ = config.load();
-
-        //println!("{:?}", config);
-
         config
     }
 

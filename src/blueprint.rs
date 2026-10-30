@@ -465,8 +465,6 @@ pub fn parse_dxf<'a>(drawing: Drawing) -> anyhow::Result<Blueprint<'a>> {
     let mut open_ends = vec![];
 
     for (color, path) in main_block.layers {
-        //println!("Color 0x{:06X}", color);
-
         let r = ((color >> 16) & 0xFF) as u8;
         let g = ((color >> 8) & 0xFF) as u8;
         let b = (color & 0xFF) as u8;

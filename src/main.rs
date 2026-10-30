@@ -163,7 +163,6 @@ impl<'a> AppState<'a> {
     }
 
     fn command(&mut self, command: GuiCommand) {
-        //println!("Command {:?}", command);
         match command {
             GuiCommand::None => (),
             GuiCommand::Open => {

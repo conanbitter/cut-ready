@@ -23,8 +23,6 @@ fn attach_console() {
     unsafe {
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
     }
-
-    //println!("Console attached")
 }
 
 // Returns:
@@ -56,12 +54,6 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
             }
         }
     }
-
-    /*println!("help {}", help);
-    println!("convert {}", convert);
-    println!("incl cubdirs {}", include_subdirs);
-    println!("input {:?}", input);
-    println!("output {:?}", output);*/
 
     if help {
         #[cfg(all(not(debug_assertions), windows))]
@@ -120,11 +112,7 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
 }
 
 fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::Result<()> {
-    //println!("Abs input: {}", input.display());
-    //println!("Abs output: {:?}", output);
-
     if input.is_file() {
-        //println!("Single file");
         let output = if let Some(output) = output {
             if is_dir(&output) {
                 output.join(input.file_name().unwrap()).with_extension("die")
@@ -141,7 +129,6 @@ fn convert_some(input: PathBuf, output: Option<PathBuf>, deep: bool) -> anyhow::
         {
             bail!(t!("cli.mustbefolder"))
         }
-        //println!("Multiple files");
 
         let files = find_files(&input, deep)?;
         for file in files {

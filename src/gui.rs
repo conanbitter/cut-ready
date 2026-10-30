@@ -580,7 +580,6 @@ impl Gui {
         match self.tooltip_state {
             TooltipState::FadeIn => {
                 if let Some(btn) = self.tooltip_button {
-                    //println!("Show tooltip {}", btn);
                     self.tooltip_state = TooltipState::Showing;
                     self.tooltip_x = self.buttons[btn].x;
                     self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
@@ -588,7 +587,6 @@ impl Gui {
                 }
             }
             TooltipState::FadeOut => {
-                //println!("Hide tooltip");
                 self.tooltip_state = TooltipState::Hidden;
                 needs_redraw = RedrawLevel::Full;
             }
@@ -604,7 +602,6 @@ impl Gui {
                 self.tooltip_x = self.buttons[btn].x;
                 self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
                 needs_redraw = true;
-                //println!("Switch tooltip to {}", btn)
             }
             TooltipState::Hidden => {
                 self.tooltip_state = TooltipState::FadeIn;
@@ -616,7 +613,6 @@ impl Gui {
                     self.tooltip_x = self.buttons[btn].x;
                     self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
                     needs_redraw = true;
-                    //println!("Switch tooltip to {}", btn);
                 }
                 self.tooltip_state = TooltipState::Showing;
                 self.reset_timer();
@@ -634,7 +630,6 @@ impl Gui {
         if immediate {
             if !matches!(self.tooltip_state, TooltipState::Hidden) {
                 redraw_needed = true;
-                //println!("Hide tooltip");
             }
             self.tooltip_state = TooltipState::Hidden;
             self.reset_timer();
