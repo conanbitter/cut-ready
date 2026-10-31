@@ -106,7 +106,7 @@ pub fn curve_path(dxf_spline: &Spline) -> anyhow::Result<tiny_skia::Path> {
 
         linear_segmentation(&curve, &mut pb, &knots);
     } else {
-        // B-Slines
+        // B-Splines
         let control_points: Vec<Point2D> = dxf_spline
             .control_points
             .iter()
