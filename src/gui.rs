@@ -171,7 +171,7 @@ impl Button {
             image_disabled,
             visible,
             command,
-            redraw_needed: true,
+            redraw_needed: visible,
         })
     }
 
@@ -257,16 +257,28 @@ impl Button {
 
     fn enable(&mut self) {
         if let ButtonState::Disabled = self.state {
-            self.state = ButtonState::Normal
+            self.state = ButtonState::Normal;
+            self.redraw_needed = true;
         }
     }
 
     fn disable(&mut self) {
         self.state = ButtonState::Disabled;
+        self.redraw_needed = true;
     }
 
     fn is_disabled(&self) -> bool {
         matches!(self.state, ButtonState::Disabled)
+    }
+
+    fn show(&mut self) {
+        self.visible = true;
+        self.redraw_needed = true;
+    }
+
+    fn hide(&mut self) {
+        self.visible = false;
+        self.redraw_needed = false;
     }
 }
 
@@ -407,8 +419,8 @@ impl Gui {
     }
 
     pub fn hide_errors(&mut self, permanent: bool, x: i32, y: i32) {
-        self.buttons[5].visible = false;
-        self.buttons[6].visible = true;
+        self.buttons[5].hide();
+        self.buttons[6].show();
         if permanent {
             self.buttons[6].state = ButtonState::Disabled;
         } else {
@@ -420,31 +432,21 @@ impl Gui {
         }
         self.buttons[7].disable();
         self.buttons[8].disable();
-
-        self.buttons[5].redraw_needed = true;
-        self.buttons[6].redraw_needed = true;
-        self.buttons[7].redraw_needed = true;
-        self.buttons[8].redraw_needed = true;
     }
 
     pub fn show_errors(&mut self, permanent: bool, x: i32, y: i32) {
-        self.buttons[5].visible = true;
+        self.buttons[5].show();
         self.buttons[5].state = if self.buttons[5].mouse_inbound(x, y) {
             ButtonState::Hovered
         } else {
             ButtonState::Normal
         };
-        self.buttons[6].visible = false;
+        self.buttons[6].hide();
         if permanent {
             self.buttons[6].state = ButtonState::Normal;
         }
         self.buttons[7].enable();
         self.buttons[8].enable();
-
-        self.buttons[5].redraw_needed = true;
-        self.buttons[6].redraw_needed = true;
-        self.buttons[7].redraw_needed = true;
-        self.buttons[8].redraw_needed = true;
     }
 
     pub fn mouse_move(&mut self, x: i32, y: i32) -> GuiInteractionResult {
@@ -548,12 +550,10 @@ impl Gui {
 
     pub fn enable_saving(&mut self) {
         self.buttons[1].enable();
-        self.buttons[1].redraw_needed = true;
     }
 
     pub fn disable_saving(&mut self) {
         self.buttons[1].disable();
-        self.buttons[1].redraw_needed = true;
     }
 
     pub fn toggle_errors(&mut self, x: i32, y: i32) -> bool {
