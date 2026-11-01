@@ -78,7 +78,7 @@ impl<'a> Inker<'a> {
         })
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32) -> anyhow::Result<()> {
         if let Some(new_pixmap) = Pixmap::new(width, height)
             && let Some(new_blueprint_pixmap) = Pixmap::new(width, height)
         {
@@ -86,6 +86,9 @@ impl<'a> Inker<'a> {
             self.blueprint_pixmap = new_blueprint_pixmap;
             self.camera.resize(width as f32, height as f32);
             self.blueprint_dirty = true;
+            Ok(())
+        } else {
+            Err(AppError::InkerResize(width, height).into())
         }
     }
 

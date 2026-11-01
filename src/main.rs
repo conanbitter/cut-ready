@@ -70,6 +70,7 @@ struct AppState<'a> {
 enum UserEvent {
     FileOpenSelected(Option<PathBuf>),
     FileSaveSelected(Option<PathBuf>),
+    ExitRequested,
 }
 
 impl<'a> AppState<'a> {
@@ -132,6 +133,23 @@ impl<'a> AppState<'a> {
 
         std::thread::spawn(move || {
             futures::executor::block_on(dialog);
+        });
+    }
+
+    fn terminal_error(&self, title: &str, message: &str) {
+        let dialog = AsyncMessageDialog::new()
+            .set_parent(&self.window)
+            .set_title(title)
+            .set_description(message)
+            .set_level(MessageLevel::Error)
+            .set_buttons(MessageButtons::Ok)
+            .show();
+
+        let proxy = self.event_proxy.clone();
+
+        std::thread::spawn(move || {
+            futures::executor::block_on(dialog);
+            let _ = proxy.send_event(UserEvent::ExitRequested);
         });
     }
 
@@ -282,6 +300,16 @@ impl<'a> AppState<'a> {
             self.window.request_redraw()
         }
     }
+
+    fn resize(&mut self, width: u32, height: u32) -> anyhow::Result<()> {
+        let nzwidth = NonZeroU32::new(width).ok_or(AppError::SurfaceResize(width, height))?;
+        let nzheight = NonZeroU32::new(height).ok_or(AppError::SurfaceResize(width, height))?;
+        self.surface
+            .resize(nzwidth, nzheight)
+            .map_err(|_| AppError::SurfaceResize(width, height))?;
+        self.inker.resize(width, height)?;
+        Ok(())
+    }
 }
 
 struct App<'a> {
@@ -340,7 +368,7 @@ impl<'a> App<'a> {
         if let (Some(width), Some(height)) = (NonZeroU32::new(window_size.width), NonZeroU32::new(window_size.height)) {
             surface
                 .resize(width, height)
-                .map_err(|_| AppError::SurfaceResize(width, height))?;
+                .map_err(|_| AppError::SurfaceResize(window_size.width, window_size.height))?;
         }
 
         let gui = Gui::new(2, 2)?;
@@ -393,7 +421,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         let Some(app_state) = self.state.as_mut() else {
             return;
         };
@@ -418,6 +446,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     }
                 }
             }
+            UserEvent::ExitRequested => event_loop.exit(),
             _ => (),
         }
     }
@@ -452,10 +481,11 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             }
 
             WindowEvent::Resized(size) => {
-                if let (Some(width), Some(height)) = (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
-                    && app_state.surface.resize(width, height).is_ok()
-                {
-                    app_state.inker.resize(size.width, size.height);
+                if let Err(err) = app_state.resize(size.width, size.height) {
+                    app_state.terminal_error(
+                        &t!("apperror.title"),
+                        format!("{}:\n{}", t!("apperror.text"), err).as_str(),
+                    )
                 }
             }
 
@@ -636,7 +666,12 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             }
 
             WindowEvent::RedrawRequested => {
-                let _ = app_state.draw();
+                if let Err(err) = app_state.draw() {
+                    app_state.terminal_error(
+                        &t!("apperror.title"),
+                        format!("{}:\n{}", t!("apperror.text"), err).as_str(),
+                    )
+                }
             }
             _ => (),
         }

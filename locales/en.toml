@@ -49,6 +49,10 @@ text = "Error creating window"
 title = "Context error"
 text = "Error creating drawing context"
 
+[apperror]
+title = "Application error"
+text = "Error"
+
 [colorhint]
 title = "Colors"
 descr = "Line colors"
