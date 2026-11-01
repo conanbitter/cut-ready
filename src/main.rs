@@ -230,24 +230,24 @@ impl<'a> AppState<'a> {
     fn color_hint(&self) {
         let mut buffer = String::new();
         let _ = writeln!(buffer, "{}:\n", t!("colorhint.descr"));
-        /*
-                for layer in self.inker.current_blueprint.layers.iter().rev() {
-                    let layer_type = match layer.hint_type {
-                        blueprint::LineType::Main => t!("colorhint.main"),
-                        blueprint::LineType::Cuts => t!("colorhint.cuts"),
-                        blueprint::LineType::Marks => t!("colorhint.marks"),
-                        blueprint::LineType::Other => t!("colorhint.other"),
-                    };
-                    let r = ((layer.hint_color >> 16) & 0xFF) as u8;
-                    let g = ((layer.hint_color >> 8) & 0xFF) as u8;
-                    let b = (layer.hint_color & 0xFF) as u8;
-                    let _ = writeln!(
-                        &mut buffer,
-                        "{0:08}    #{0:06X}   RGB({2:03}, {3:03}, {4:03})   {1}\n",
-                        layer.hint_color, layer_type, r, g, b
-                    );
-                }
-        */
+
+        for layer in self.inker.current_blueprint.layers.iter().rev() {
+            let layer_type = match layer.hint_type {
+                blueprint::LineType::Main => t!("colorhint.main"),
+                blueprint::LineType::Cuts => t!("colorhint.cuts"),
+                blueprint::LineType::Marks => t!("colorhint.marks"),
+                blueprint::LineType::Other => t!("colorhint.other"),
+            };
+            let r = ((layer.hint_color >> 16) & 0xFF) as u8;
+            let g = ((layer.hint_color >> 8) & 0xFF) as u8;
+            let b = (layer.hint_color & 0xFF) as u8;
+            let _ = writeln!(
+                &mut buffer,
+                "{0:08}    #{0:06X}   RGB({2:03}, {3:03}, {4:03})   {1}\n",
+                layer.hint_color, layer_type, r, g, b
+            );
+        }
+
         self.message_box(&t!("colorhint.title"), &buffer, MessageLevel::Info);
     }
 

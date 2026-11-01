@@ -12,7 +12,7 @@ pub struct Inker<'a> {
     show_errors: bool,
     error_paint: Paint<'a>,
 
-    current_blueprint: Blueprint<'a>,
+    pub current_blueprint: Blueprint<'a>,
     blueprint_pixmap: Pixmap,
 
     frame: Option<Path>,
