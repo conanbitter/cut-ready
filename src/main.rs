@@ -6,6 +6,7 @@ use softbuffer::{Context, Surface};
 use std::fmt::Write;
 use std::time::Instant;
 use std::{ffi::OsStr, num::NonZeroU32, path::PathBuf, rc::Rc};
+use winit::event::MouseButton;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
@@ -44,6 +45,12 @@ mod pointerrors;
 
 const SPLASH_DATA: &[u8] = include_bytes!("../assets/splash.dxf");
 
+enum MouseAction {
+    None,
+    Drag,
+    Frame,
+}
+
 struct AppState<'a> {
     window: Rc<Window>,
     surface: Surface<OwnedDisplayHandle, Rc<Window>>,
@@ -53,7 +60,7 @@ struct AppState<'a> {
     mouse_y: f64,
     old_x: f64,
     old_y: f64,
-    drag: bool,
+    mouse_action: MouseAction,
     show_errors: bool,
     event_proxy: EventLoopProxy<UserEvent>,
     current_filename: Option<PathBuf>,
@@ -254,7 +261,11 @@ impl<'a> AppState<'a> {
     }
 
     fn draw(&mut self) -> anyhow::Result<()> {
-        let data = self.inker.draw(&mut self.gui, self.show_errors);
+        let data = self.inker.draw(
+            &mut self.gui,
+            self.show_errors,
+            matches!(self.mouse_action, MouseAction::Frame),
+        );
 
         let mut buffer = self.surface.buffer_mut().map_err(|_| AppError::SurfaceDraw)?;
 
@@ -352,7 +363,7 @@ impl<'a> App<'a> {
             mouse_y: 0.0,
             old_x: 0.0,
             old_y: 0.0,
-            drag: false,
+            mouse_action: MouseAction::None,
             gui,
             show_errors: false,
             event_proxy: self.proxy.clone(),
@@ -459,23 +470,46 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             WindowEvent::MouseInput {
                 device_id: _,
                 state,
-                button: _,
+                button,
             } => match state {
                 winit::event::ElementState::Pressed => {
                     let gui_result = app_state
                         .gui
                         .mouse_press(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                    let mut redraw_needed = false;
                     if !gui_result.captured {
-                        app_state.drag = true;
                         app_state.old_x = app_state.mouse_x;
                         app_state.old_y = app_state.mouse_y;
+                        redraw_needed = match button {
+                            MouseButton::Left => {
+                                app_state.mouse_action = MouseAction::Drag;
+                                true
+                            }
+                            MouseButton::Right => {
+                                app_state.mouse_action = MouseAction::Frame;
+                                app_state.inker.update_frame(
+                                    app_state.old_x as f32,
+                                    app_state.old_y as f32,
+                                    app_state.mouse_x as f32,
+                                    app_state.mouse_y as f32,
+                                );
+                                true
+                            }
+                            _ => false,
+                        };
                     }
-                    match gui_result.needs_redraw {
-                        gui::RedrawLevel::None => (),
-                        gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                        gui::RedrawLevel::Full => {
-                            app_state.inker.redraw_needed = true;
-                            app_state.window.request_redraw();
+
+                    if redraw_needed {
+                        app_state.inker.redraw_needed = true;
+                        app_state.window.request_redraw();
+                    } else {
+                        match gui_result.needs_redraw {
+                            gui::RedrawLevel::None => (),
+                            gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                            gui::RedrawLevel::Full => {
+                                app_state.inker.redraw_needed = true;
+                                app_state.window.request_redraw();
+                            }
                         }
                     }
                 }
@@ -483,18 +517,34 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     let (gui_result, gui_command) = app_state
                         .gui
                         .mouse_release(app_state.mouse_x as i32, app_state.mouse_y as i32);
-                    app_state.drag = false;
-                    match gui_result.needs_redraw {
-                        gui::RedrawLevel::None => match gui_command {
-                            GuiCommand::None => (),
-                            _ => app_state.window.request_redraw(),
-                        },
-                        gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                        gui::RedrawLevel::Full => {
-                            app_state.inker.redraw_needed = true;
-                            app_state.window.request_redraw();
+                    if matches!(app_state.mouse_action, MouseAction::Frame) {
+                        /*println!(
+                            "Frame zoom x1={}, y1={}, x2={}, y2={}",
+                            app_state.old_x, app_state.old_y, app_state.mouse_x, app_state.mouse_y
+                        );*/
+                        app_state.inker.zoom_frame(
+                            app_state.old_x as f32,
+                            app_state.old_y as f32,
+                            app_state.mouse_x as f32,
+                            app_state.mouse_y as f32,
+                        );
+                        app_state.inker.redraw_needed = true;
+                        app_state.window.request_redraw();
+                    } else {
+                        match gui_result.needs_redraw {
+                            gui::RedrawLevel::None => match gui_command {
+                                GuiCommand::None => (),
+                                _ => app_state.window.request_redraw(),
+                            },
+                            gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
+                            gui::RedrawLevel::Full => {
+                                app_state.inker.redraw_needed = true;
+                                app_state.window.request_redraw();
+                            }
                         }
                     }
+                    app_state.mouse_action = MouseAction::None;
+
                     match gui_command {
                         GuiCommand::None => (),
                         _ => app_state.command(gui_command),
@@ -507,18 +557,34 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                 app_state.mouse_y = position.y;
                 let gui_result = app_state.gui.mouse_move(position.x as i32, position.y as i32);
                 let mut needs_redraw = gui_result.needs_redraw;
-                if gui_result.captured {
-                    app_state.drag = false;
-                } else {
-                    if app_state.drag {
-                        let dx = position.x - app_state.old_x;
-                        let dy = position.y - app_state.old_y;
-                        app_state.inker.camera.pan(dx as f32, dy as f32);
-                        app_state.old_x = position.x;
-                        app_state.old_y = position.y;
-                        needs_redraw = gui::RedrawLevel::Full;
-                        app_state.inker.redraw_needed = true;
+
+                match app_state.mouse_action {
+                    MouseAction::Drag => {
+                        if gui_result.captured {
+                            app_state.mouse_action = MouseAction::None;
+                        } else {
+                            let dx = position.x - app_state.old_x;
+                            let dy = position.y - app_state.old_y;
+                            app_state.inker.camera.pan(dx as f32, dy as f32);
+                            app_state.old_x = position.x;
+                            app_state.old_y = position.y;
+                            needs_redraw = gui::RedrawLevel::Full;
+                        }
                     }
+                    MouseAction::Frame if !gui_result.captured => {
+                        app_state.inker.update_frame(
+                            app_state.old_x as f32,
+                            app_state.old_y as f32,
+                            app_state.mouse_x as f32,
+                            app_state.mouse_y as f32,
+                        );
+                        /*println!(
+                            "Update frame x1={}, y1={}, x2={}, y2={}",
+                            app_state.old_x, app_state.old_y, app_state.mouse_x, app_state.mouse_y
+                        );*/
+                        needs_redraw = gui::RedrawLevel::Full;
+                    }
+                    _ => (),
                 }
                 match needs_redraw {
                     gui::RedrawLevel::None => (),

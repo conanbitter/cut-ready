@@ -1,6 +1,6 @@
-use tiny_skia::{Color, LineCap, LineJoin, Paint, Pixmap, Stroke};
+use tiny_skia::{BlendMode, Color, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, Transform};
 
-use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, gui::Gui};
+use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, geometry::EPSILON, gui::Gui};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
@@ -9,6 +9,8 @@ pub struct Inker<'a> {
     pub current_blueprint: Blueprint<'a>,
     error_paint: Paint<'a>,
     pub redraw_needed: bool,
+    frame: Option<Path>,
+    frame_paint: Paint<'a>,
 }
 
 impl<'a> Inker<'a> {
@@ -28,6 +30,13 @@ impl<'a> Inker<'a> {
             ..Paint::default()
         };
 
+        let frame_paint = Paint {
+            anti_alias: CONFIG.anti_aliasing,
+            shader: tiny_skia::Shader::SolidColor(Color::from_rgba8(255, 255, 255, 255)),
+            blend_mode: BlendMode::Difference,
+            ..Paint::default()
+        };
+
         Ok(Inker {
             pixmap,
             stroke,
@@ -35,6 +44,8 @@ impl<'a> Inker<'a> {
             current_blueprint: Blueprint::default(),
             error_paint,
             redraw_needed: true,
+            frame: None,
+            frame_paint,
         })
     }
 
@@ -46,7 +57,7 @@ impl<'a> Inker<'a> {
         }
     }
 
-    pub fn draw(&mut self, gui: &mut Gui, show_errors: bool) -> &[u8] {
+    pub fn draw(&mut self, gui: &mut Gui, show_errors: bool, show_frame: bool) -> &[u8] {
         let force = self.redraw_needed;
         if self.redraw_needed {
             self.pixmap.fill(Color::WHITE);
@@ -65,6 +76,12 @@ impl<'a> Inker<'a> {
                         .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
                 }
             }
+
+            if show_frame && let Some(frame_path) = self.frame.as_ref() {
+                self.stroke.width = 1.95;
+                self.pixmap
+                    .stroke_path(frame_path, &self.frame_paint, &self.stroke, Transform::identity(), None);
+            }
             self.redraw_needed = false;
         }
 
@@ -75,5 +92,55 @@ impl<'a> Inker<'a> {
 
     pub fn show_all(&mut self) {
         self.camera.show_all(&self.current_blueprint.bounds);
+    }
+
+    pub fn update_frame(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
+        let mut pb = if let Some(path) = self.frame.take() {
+            path.clear()
+        } else {
+            PathBuilder::new()
+        };
+
+        let (left, right) = if (x1 - x2).abs() < EPSILON {
+            (x1, x1 + EPSILON)
+        } else if x1 < x2 {
+            (x1, x2)
+        } else {
+            (x2, x1)
+        };
+        let (top, bottom) = if (y1 - y2).abs() < EPSILON {
+            (y1, y1 + EPSILON)
+        } else if y1 < y2 {
+            (y1, y2)
+        } else {
+            (y2, y1)
+        };
+        //println!("Update l={}  t={}  r={}  b={}", left, top, right, bottom);
+
+        let rect = Rect::from_ltrb(left, top, right, bottom).unwrap(); // checked before
+
+        pb.push_rect(rect);
+        self.frame = pb.finish();
+    }
+
+    pub fn zoom_frame(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
+        if (x1 - x2).abs() < EPSILON || (y1 - y2).abs() < EPSILON {
+            return;
+        }
+
+        let inv_camera = self.camera.matrix.invert().unwrap();
+        let mut p1 = tiny_skia::Point { x: x1, y: y1 };
+        let mut p2 = tiny_skia::Point { x: x2, y: y2 };
+        inv_camera.map_point(&mut p1);
+        inv_camera.map_point(&mut p2);
+        let tiny_skia::Point { x: x1, y: y1 } = p1;
+        let tiny_skia::Point { x: x2, y: y2 } = p2;
+
+        let (left, right) = if x1 < x2 { (x1, x2) } else { (x2, x1) };
+        let (top, bottom) = if y1 < y2 { (y1, y2) } else { (y2, y1) };
+        //println!("Update l={}  t={}  r={}  b={}", left, top, right, bottom);
+
+        let rect = Rect::from_ltrb(left, top, right, bottom).unwrap(); // checked before
+        self.camera.show_all(&rect);
     }
 }
