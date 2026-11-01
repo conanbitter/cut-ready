@@ -20,6 +20,7 @@ use winit::{
 use crate::batchconv::try_batch_convert;
 use crate::config::{CONFIG, ConfWindow};
 use crate::errors::AppError;
+use crate::gui::GuiInteractionResult;
 use crate::{
     blueprint::{decode_dxf, load_dxf},
     diereader::{convert_die, load_die},
@@ -61,7 +62,6 @@ struct AppState<'a> {
     old_x: f64,
     old_y: f64,
     mouse_action: MouseAction,
-    show_errors: bool,
     event_proxy: EventLoopProxy<UserEvent>,
     current_filename: Option<PathBuf>,
     ctrl_pressed: bool,
@@ -159,19 +159,17 @@ impl<'a> AppState<'a> {
             Ok(blueprint) => {
                 if blueprint.errors.path.is_none() {
                     self.gui.hide_errors(true, self.mouse_x as i32, self.mouse_y as i32);
-                    self.show_errors = false;
+                    self.inker.errors_visibile(false);
                 } else {
                     self.gui.show_errors(true, self.mouse_x as i32, self.mouse_y as i32);
-                    self.show_errors = true;
+                    self.inker.errors_visibile(true);
                 }
-                self.inker.current_blueprint = blueprint;
-                self.inker.show_all();
+                self.inker.set_blueprint(blueprint);
 
                 if can_save {
                     self.current_filename = Some(path.clone());
                 }
 
-                self.inker.redraw_needed = true;
                 self.window.request_redraw();
             }
             Err(err) => {
@@ -201,73 +199,62 @@ impl<'a> AppState<'a> {
             }
             GuiCommand::ZoomIn => {
                 let PhysicalSize { width, height } = self.window.inner_size();
-                self.inker
-                    .camera
-                    .scale(1.0 / 0.9, width as f32 / 2.0, height as f32 / 2.0);
-                self.inker.redraw_needed = true;
+                self.inker.zoom(1.0 / 0.9, width as f32 / 2.0, height as f32 / 2.0);
             }
             GuiCommand::ZoomOut => {
                 let PhysicalSize { width, height } = self.window.inner_size();
-                self.inker.camera.scale(0.9, width as f32 / 2.0, height as f32 / 2.0);
-                self.inker.redraw_needed = true;
+                self.inker.zoom(0.9, width as f32 / 2.0, height as f32 / 2.0);
             }
             GuiCommand::ShowAll => {
                 self.inker.show_all();
-                self.inker.redraw_needed = true;
             }
             GuiCommand::ShowErrors => {
-                self.show_errors = true;
-                self.inker.redraw_needed = true;
+                self.inker.errors_visibile(true);
             }
             GuiCommand::HideErrors => {
-                self.show_errors = false;
-                self.inker.redraw_needed = true;
+                self.inker.errors_visibile(false);
             }
             GuiCommand::NextError => {
-                let point = self.inker.current_blueprint.errors.next_error();
-                self.inker.camera.move_to(point);
-                self.inker.redraw_needed = true;
+                self.inker.next_error();
             }
             GuiCommand::PrevError => {
-                let point = self.inker.current_blueprint.errors.prev_error();
-                self.inker.camera.move_to(point);
-                self.inker.redraw_needed = true;
+                self.inker.prev_error();
             }
+        }
+
+        if !matches!(command, GuiCommand::None) {
+            self.window.request_redraw();
         }
     }
 
     fn color_hint(&self) {
         let mut buffer = String::new();
         let _ = writeln!(buffer, "{}:\n", t!("colorhint.descr"));
-
-        for layer in self.inker.current_blueprint.layers.iter().rev() {
-            let layer_type = match layer.hint_type {
-                blueprint::LineType::Main => t!("colorhint.main"),
-                blueprint::LineType::Cuts => t!("colorhint.cuts"),
-                blueprint::LineType::Marks => t!("colorhint.marks"),
-                blueprint::LineType::Other => t!("colorhint.other"),
-            };
-            let r = ((layer.hint_color >> 16) & 0xFF) as u8;
-            let g = ((layer.hint_color >> 8) & 0xFF) as u8;
-            let b = (layer.hint_color & 0xFF) as u8;
-            let _ = writeln!(
-                &mut buffer,
-                "{0:08}    #{0:06X}   RGB({2:03}, {3:03}, {4:03})   {1}\n",
-                layer.hint_color, layer_type, r, g, b
-            );
-        }
-
+        /*
+                for layer in self.inker.current_blueprint.layers.iter().rev() {
+                    let layer_type = match layer.hint_type {
+                        blueprint::LineType::Main => t!("colorhint.main"),
+                        blueprint::LineType::Cuts => t!("colorhint.cuts"),
+                        blueprint::LineType::Marks => t!("colorhint.marks"),
+                        blueprint::LineType::Other => t!("colorhint.other"),
+                    };
+                    let r = ((layer.hint_color >> 16) & 0xFF) as u8;
+                    let g = ((layer.hint_color >> 8) & 0xFF) as u8;
+                    let b = (layer.hint_color & 0xFF) as u8;
+                    let _ = writeln!(
+                        &mut buffer,
+                        "{0:08}    #{0:06X}   RGB({2:03}, {3:03}, {4:03})   {1}\n",
+                        layer.hint_color, layer_type, r, g, b
+                    );
+                }
+        */
         self.message_box(&t!("colorhint.title"), &buffer, MessageLevel::Info);
     }
 
     fn draw(&mut self) -> anyhow::Result<()> {
-        let start_time = Instant::now();
+        //let start_time = Instant::now();
 
-        let data = self.inker.draw(
-            &mut self.gui,
-            self.show_errors,
-            matches!(self.mouse_action, MouseAction::Frame),
-        );
+        let data = self.inker.draw(&mut self.gui);
 
         let mut buffer = self.surface.buffer_mut().map_err(|_| AppError::SurfaceDraw)?;
 
@@ -281,10 +268,19 @@ impl<'a> AppState<'a> {
 
         buffer.present().map_err(|_| AppError::SurfaceDraw)?;
 
-        let frame_duration = Instant::now().duration_since(start_time);
-        self.window.set_title(&frame_duration.as_micros().to_string());
+        //let frame_duration = Instant::now().duration_since(start_time);
+        //self.window.set_title(&frame_duration.as_micros().to_string());
 
         Ok(())
+    }
+
+    fn process_gui_result(&mut self, result: &GuiInteractionResult) {
+        if result.request_invalidate {
+            self.inker.invalidate();
+        }
+        if result.request_redraw {
+            self.window.request_redraw()
+        }
     }
 }
 
@@ -355,9 +351,7 @@ impl<'a> App<'a> {
             width: inner_width,
             height: inner_height,
         } = window_rc.inner_size();
-        inker
-            .camera
-            .set_viewport(inner_width as f32, inner_height as f32, top_height);
+        inker.set_viewport(inner_width as f32, inner_height as f32, top_height);
         inker.show_all();
 
         Ok(AppState {
@@ -370,7 +364,6 @@ impl<'a> App<'a> {
             old_y: 0.0,
             mouse_action: MouseAction::None,
             gui,
-            show_errors: false,
             event_proxy: self.proxy.clone(),
             current_filename: None,
             ctrl_pressed: false,
@@ -434,14 +427,8 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             && let Some(timer) = app_state.gui.timer
         {
             if Instant::now() >= timer {
-                match app_state.gui.on_timer() {
-                    gui::RedrawLevel::None => (),
-                    gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                    gui::RedrawLevel::Full => {
-                        app_state.inker.redraw_needed = true;
-                        app_state.window.request_redraw();
-                    }
-                }
+                let gui_result = app_state.gui.on_timer();
+                app_state.process_gui_result(&gui_result);
 
                 app_state.gui.reset_timer();
 
@@ -481,11 +468,12 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     let gui_result = app_state
                         .gui
                         .mouse_press(app_state.mouse_x as i32, app_state.mouse_y as i32);
-                    let mut redraw_needed = false;
+                    app_state.process_gui_result(&gui_result);
+
                     if !gui_result.captured {
                         app_state.old_x = app_state.mouse_x;
                         app_state.old_y = app_state.mouse_y;
-                        redraw_needed = match button {
+                        let dirty = match button {
                             MouseButton::Left => {
                                 app_state.mouse_action = MouseAction::Drag;
                                 true
@@ -502,19 +490,8 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             }
                             _ => false,
                         };
-                    }
-
-                    if redraw_needed {
-                        //app_state.inker.redraw_needed = true;
-                        app_state.window.request_redraw();
-                    } else {
-                        match gui_result.needs_redraw {
-                            gui::RedrawLevel::None => (),
-                            gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                            gui::RedrawLevel::Full => {
-                                app_state.inker.redraw_needed = true;
-                                app_state.window.request_redraw();
-                            }
+                        if dirty {
+                            app_state.window.request_redraw();
                         }
                     }
                 }
@@ -522,31 +499,16 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     let (gui_result, gui_command) = app_state
                         .gui
                         .mouse_release(app_state.mouse_x as i32, app_state.mouse_y as i32);
+                    app_state.process_gui_result(&gui_result);
                     if matches!(app_state.mouse_action, MouseAction::Frame) {
-                        /*println!(
-                            "Frame zoom x1={}, y1={}, x2={}, y2={}",
-                            app_state.old_x, app_state.old_y, app_state.mouse_x, app_state.mouse_y
-                        );*/
                         app_state.inker.zoom_frame(
                             app_state.old_x as f32,
                             app_state.old_y as f32,
                             app_state.mouse_x as f32,
                             app_state.mouse_y as f32,
                         );
-                        app_state.inker.redraw_needed = true;
+                        app_state.inker.invalidate();
                         app_state.window.request_redraw();
-                    } else {
-                        match gui_result.needs_redraw {
-                            gui::RedrawLevel::None => match gui_command {
-                                GuiCommand::None => (),
-                                _ => app_state.window.request_redraw(),
-                            },
-                            gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                            gui::RedrawLevel::Full => {
-                                app_state.inker.redraw_needed = true;
-                                app_state.window.request_redraw();
-                            }
-                        }
                     }
                     app_state.mouse_action = MouseAction::None;
 
@@ -560,8 +522,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             WindowEvent::CursorMoved { device_id: _, position } => {
                 app_state.mouse_x = position.x;
                 app_state.mouse_y = position.y;
+
                 let gui_result = app_state.gui.mouse_move(position.x as i32, position.y as i32);
-                let mut needs_redraw = gui_result.needs_redraw;
+                app_state.process_gui_result(&gui_result);
 
                 match app_state.mouse_action {
                     MouseAction::Drag => {
@@ -570,10 +533,10 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         } else {
                             let dx = position.x - app_state.old_x;
                             let dy = position.y - app_state.old_y;
-                            app_state.inker.camera.pan(dx as f32, dy as f32);
+                            app_state.inker.pan(dx as f32, dy as f32);
                             app_state.old_x = position.x;
                             app_state.old_y = position.y;
-                            needs_redraw = gui::RedrawLevel::Full;
+                            app_state.window.request_redraw();
                         }
                     }
                     MouseAction::Frame if !gui_result.captured => {
@@ -583,21 +546,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             app_state.mouse_x as f32,
                             app_state.mouse_y as f32,
                         );
-                        /*println!(
-                            "Update frame x1={}, y1={}, x2={}, y2={}",
-                            app_state.old_x, app_state.old_y, app_state.mouse_x, app_state.mouse_y
-                        );*/
-                        needs_redraw = gui::RedrawLevel::GuiOnly;
-                    }
-                    _ => (),
-                }
-                match needs_redraw {
-                    gui::RedrawLevel::None => (),
-                    gui::RedrawLevel::GuiOnly => app_state.window.request_redraw(),
-                    gui::RedrawLevel::Full => {
-                        app_state.inker.redraw_needed = true;
                         app_state.window.request_redraw();
                     }
+                    _ => (),
                 }
             }
 
@@ -616,9 +567,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     let factor = if y >= 0.0 { 1.0 / 0.9 } else { 0.9 };
                     app_state
                         .inker
-                        .camera
-                        .scale(factor, app_state.mouse_x as f32, app_state.mouse_y as f32);
-                    app_state.inker.redraw_needed = true;
+                        .zoom(factor, app_state.mouse_x as f32, app_state.mouse_y as f32);
                     app_state.window.request_redraw();
                 }
                 winit::event::MouseScrollDelta::PixelDelta(_) => (),
@@ -636,23 +585,16 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         match code {
                             KeyCode::ControlLeft | KeyCode::ControlRight => app_state.ctrl_pressed = true,
                             KeyCode::ArrowRight => {
-                                if app_state.show_errors {
-                                    app_state.command(GuiCommand::NextError);
-                                    app_state.window.request_redraw();
-                                }
+                                app_state.command(GuiCommand::NextError);
                             }
                             KeyCode::ArrowLeft => {
-                                if app_state.show_errors {
-                                    app_state.command(GuiCommand::PrevError);
-                                    app_state.window.request_redraw();
-                                }
+                                app_state.command(GuiCommand::PrevError);
                             }
                             KeyCode::KeyL if app_state.ctrl_pressed => {
                                 app_state.color_hint();
                             }
                             KeyCode::KeyA if app_state.ctrl_pressed => {
                                 app_state.command(GuiCommand::ShowAll);
-                                app_state.window.request_redraw();
                             }
                             KeyCode::KeyO if app_state.ctrl_pressed => {
                                 app_state.command(GuiCommand::Open);
@@ -661,10 +603,10 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                                 app_state.command(GuiCommand::Save);
                             }
                             KeyCode::KeyE if app_state.ctrl_pressed => {
-                                app_state.show_errors = app_state
+                                let show_errors = app_state
                                     .gui
                                     .toggle_errors(app_state.mouse_x as i32, app_state.mouse_y as i32);
-                                app_state.inker.redraw_needed = true;
+                                app_state.inker.errors_visibile(show_errors);
                                 app_state.window.request_redraw();
                             }
                             _ => (),
@@ -673,11 +615,9 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     match code {
                         KeyCode::Equal => {
                             app_state.command(GuiCommand::ZoomIn);
-                            app_state.window.request_redraw();
                         }
                         KeyCode::Minus => {
                             app_state.command(GuiCommand::ZoomOut);
-                            app_state.window.request_redraw();
                         }
                         _ => (),
                     }

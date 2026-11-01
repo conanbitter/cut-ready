@@ -5,16 +5,23 @@ use tiny_skia::{
 use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, geometry::EPSILON, gui::Gui};
 
 pub struct Inker<'a> {
-    pixmap: Pixmap,
-    blueprint_pixmap: Pixmap,
+    main_pixmap: Pixmap,
     stroke: Stroke,
-    frame_stroke: Stroke,
-    pub camera: Camera,
-    pub current_blueprint: Blueprint<'a>,
+    camera: Camera,
+
+    show_errors: bool,
     error_paint: Paint<'a>,
-    pub redraw_needed: bool,
+
+    current_blueprint: Blueprint<'a>,
+    blueprint_pixmap: Pixmap,
+
     frame: Option<Path>,
     frame_paint: Paint<'a>,
+    frame_stroke: Stroke,
+    frame_show: bool,
+
+    window_dirty: bool,
+    blueprint_dirty: bool,
 }
 
 impl<'a> Inker<'a> {
@@ -51,16 +58,23 @@ impl<'a> Inker<'a> {
         };
 
         Ok(Inker {
-            pixmap,
-            blueprint_pixmap,
+            main_pixmap: pixmap,
             stroke,
             camera: Camera::default(),
-            current_blueprint: Blueprint::default(),
+
+            show_errors: false,
             error_paint,
-            redraw_needed: true,
+
+            current_blueprint: Blueprint::default(),
+            blueprint_pixmap,
+
             frame: None,
             frame_paint,
             frame_stroke,
+            frame_show: false,
+
+            blueprint_dirty: true,
+            window_dirty: false,
         })
     }
 
@@ -68,16 +82,17 @@ impl<'a> Inker<'a> {
         if let Some(new_pixmap) = Pixmap::new(width, height)
             && let Some(new_blueprint_pixmap) = Pixmap::new(width, height)
         {
-            self.pixmap = new_pixmap;
+            self.main_pixmap = new_pixmap;
             self.blueprint_pixmap = new_blueprint_pixmap;
             self.camera.resize(width as f32, height as f32);
-            self.redraw_needed = true;
+            self.blueprint_dirty = true;
         }
     }
 
-    pub fn draw(&mut self, gui: &mut Gui, show_errors: bool, show_frame: bool) -> &[u8] {
-        let force = self.redraw_needed;
-        if self.redraw_needed {
+    pub fn draw(&mut self, gui: &mut Gui) -> &[u8] {
+        if self.blueprint_dirty {
+            self.window_dirty = true;
+
             self.blueprint_pixmap.fill(Color::WHITE);
 
             for layer in &self.current_blueprint.layers {
@@ -86,7 +101,7 @@ impl<'a> Inker<'a> {
                     .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
             }
 
-            if show_errors {
+            if self.show_errors {
                 self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
                 if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
                     self.camera.apply_to_stroke(CONFIG.line_widths.error, &mut self.stroke);
@@ -100,28 +115,39 @@ impl<'a> Inker<'a> {
                 }
             }
 
-            self.pixmap.data_mut().copy_from_slice(self.blueprint_pixmap.data());
-
-            self.redraw_needed = false;
+            self.blueprint_dirty = false;
         }
 
-        if show_frame && let Some(frame_path) = self.frame.as_ref() {
-            self.pixmap.stroke_path(
-                frame_path,
-                &self.frame_paint,
-                &self.frame_stroke,
-                Transform::identity(),
-                None,
-            );
+        let force_gui = self.window_dirty;
+
+        if self.window_dirty {
+            self.main_pixmap
+                .data_mut()
+                .copy_from_slice(self.blueprint_pixmap.data());
+
+            if self.frame_show
+                && let Some(frame_path) = self.frame.as_ref()
+            {
+                self.main_pixmap.stroke_path(
+                    frame_path,
+                    &self.frame_paint,
+                    &self.frame_stroke,
+                    Transform::identity(),
+                    None,
+                );
+            }
+
+            self.window_dirty = false;
         }
 
-        gui.draw(&mut self.pixmap, force);
+        gui.draw(&mut self.main_pixmap, force_gui);
 
-        self.pixmap.data()
+        self.main_pixmap.data()
     }
 
     pub fn show_all(&mut self) {
         self.camera.show_all(&self.current_blueprint.bounds);
+        self.blueprint_dirty = true;
     }
 
     pub fn update_frame(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
@@ -151,10 +177,13 @@ impl<'a> Inker<'a> {
 
         pb.push_rect(rect);
         self.frame = pb.finish();
+        self.frame_show = true;
+        self.window_dirty = true;
     }
 
     pub fn zoom_frame(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
         if (x1 - x2).abs() < EPSILON || (y1 - y2).abs() < EPSILON {
+            self.frame_show = false;
             return;
         }
 
@@ -172,5 +201,53 @@ impl<'a> Inker<'a> {
 
         let rect = Rect::from_ltrb(left, top, right, bottom).unwrap(); // checked before
         self.camera.show_all(&rect);
+        self.frame_show = false;
+        self.blueprint_dirty = true;
+    }
+
+    pub fn errors_visibile(&mut self, visible: bool) {
+        self.show_errors = visible;
+        self.blueprint_dirty = true;
+    }
+
+    pub fn pan(&mut self, x: f32, y: f32) {
+        self.camera.pan(x, y);
+        self.blueprint_dirty = true;
+    }
+
+    pub fn zoom(&mut self, ds: f32, x: f32, y: f32) {
+        self.camera.scale(ds, x, y);
+        self.blueprint_dirty = true;
+    }
+
+    pub fn set_viewport(&mut self, width: f32, height: f32, offset: f32) {
+        self.camera.set_viewport(width, height, offset);
+    }
+
+    pub fn invalidate(&mut self) {
+        self.window_dirty = true;
+    }
+
+    pub fn set_blueprint(&mut self, new_blueprint: Blueprint<'a>) {
+        self.current_blueprint = new_blueprint;
+        self.show_all();
+    }
+
+    pub fn next_error(&mut self) {
+        if self.show_errors
+            && let Some(point) = self.current_blueprint.errors.next_error()
+        {
+            self.camera.move_to(point);
+            self.blueprint_dirty = true;
+        }
+    }
+
+    pub fn prev_error(&mut self) {
+        if self.show_errors
+            && let Some(point) = self.current_blueprint.errors.prev_error()
+        {
+            self.camera.move_to(point);
+            self.blueprint_dirty = true;
+        }
     }
 }

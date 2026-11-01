@@ -52,22 +52,22 @@ impl PointErrors {
         }
     }
 
-    pub fn next_error(&mut self) -> Point2D {
+    pub fn next_error(&mut self) -> Option<Point2D> {
         if self.current_error >= self.points.len() - 1 {
             self.current_error = 0;
         } else {
             self.current_error += 1;
         }
-        self.points[self.current_error]
+        self.points.get(self.current_error).copied()
     }
 
-    pub fn prev_error(&mut self) -> Point2D {
+    pub fn prev_error(&mut self) -> Option<Point2D> {
         if self.current_error == 0 {
             self.current_error = self.points.len() - 1;
         } else {
             self.current_error -= 1;
         }
-        self.points[self.current_error]
+        self.points.get(self.current_error).cloned()
     }
 }
 

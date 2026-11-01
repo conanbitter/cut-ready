@@ -134,18 +134,11 @@ struct Button {
     redraw_needed: bool,
 }
 
-#[derive(PartialEq, PartialOrd, Default)]
-pub enum RedrawLevel {
-    #[default]
-    None,
-    GuiOnly,
-    Full,
-}
-
 #[derive(Default)]
 pub struct GuiInteractionResult {
     pub captured: bool,
-    pub needs_redraw: RedrawLevel,
+    pub request_redraw: bool,
+    pub request_invalidate: bool,
 }
 
 impl Button {
@@ -282,14 +275,16 @@ impl Button {
     }
 }
 
-/*
 impl GuiInteractionResult {
-    fn append(&mut self, other: GuiInteractionResult) {
-        self.captured |= other.captured;
-        self.needs_redraw |= other.needs_redraw;
+    fn redraw(&mut self) {
+        self.request_redraw = true;
+    }
+
+    fn invalidate(&mut self) {
+        self.request_redraw = true;
+        self.request_invalidate = true;
     }
 }
-*/
 
 #[derive(Debug, Clone, Copy)]
 pub enum GuiCommand {
@@ -450,14 +445,13 @@ impl Gui {
     }
 
     pub fn mouse_move(&mut self, x: i32, y: i32) -> GuiInteractionResult {
-        let mut total_captured = false;
-        let mut redraw_needed = RedrawLevel::None;
+        let mut res = GuiInteractionResult::default();
         let mut hovered: Option<usize> = None;
         for (i, btn) in self.buttons.iter_mut().enumerate() {
             let captured = btn.mouse_move(x, y);
-            total_captured = total_captured || captured;
+            res.captured = res.captured || captured;
             if btn.redraw_needed {
-                redraw_needed = RedrawLevel::GuiOnly
+                res.redraw();
             }
             if captured && !btn.is_disabled() {
                 hovered = Some(i);
@@ -466,7 +460,7 @@ impl Gui {
 
         if let Some(hovered_index) = hovered {
             if hovered != self.tooltip_button && self.on_enter(hovered_index) {
-                redraw_needed = RedrawLevel::Full;
+                res.invalidate();
             }
         } else {
             if hovered != self.tooltip_button {
@@ -474,39 +468,34 @@ impl Gui {
             }
         }
 
-        GuiInteractionResult {
-            captured: total_captured,
-            needs_redraw: redraw_needed,
-        }
+        res
     }
 
     pub fn mouse_press(&mut self, x: i32, y: i32) -> GuiInteractionResult {
-        let mut total_captured = false;
-        let mut redraw_needed = RedrawLevel::None;
+        let mut res = GuiInteractionResult::default();
         for btn in &mut self.buttons {
             let captured = btn.mouse_press(x, y);
-            total_captured = total_captured || captured;
+            res.captured = res.captured || captured;
             if btn.redraw_needed {
-                redraw_needed = RedrawLevel::GuiOnly;
+                res.redraw();
             }
         }
         if self.tooltip_button.is_some() && self.on_leave(true) {
-            redraw_needed = RedrawLevel::Full;
+            res.invalidate();
         }
-        GuiInteractionResult {
-            captured: total_captured,
-            needs_redraw: redraw_needed,
-        }
+
+        res
     }
 
     pub fn mouse_release(&mut self, x: i32, y: i32) -> (GuiInteractionResult, GuiCommand) {
-        let mut total_captured = false;
-        let mut redraw_needed = false;
+        let mut res = GuiInteractionResult::default();
         let mut res_command = GuiCommand::None;
         for btn in &mut self.buttons {
             let (captured, command) = btn.mouse_release(x, y);
-            total_captured = total_captured || captured;
-            redraw_needed = redraw_needed || btn.redraw_needed;
+            res.captured = res.captured || captured;
+            if btn.redraw_needed {
+                res.redraw();
+            }
             match command {
                 GuiCommand::None => (),
                 _ => res_command = command,
@@ -519,33 +508,23 @@ impl Gui {
             _ => (),
         }
 
-        (
-            GuiInteractionResult {
-                captured: total_captured,
-                needs_redraw: if redraw_needed {
-                    RedrawLevel::GuiOnly
-                } else {
-                    RedrawLevel::None
-                },
-            },
-            res_command,
-        )
+        (res, res_command)
     }
 
     pub fn mouse_leaved(&mut self) -> bool {
-        let mut redraw_needed = false;
+        let mut request_redraw = false;
         for btn in &mut self.buttons {
             match btn.state {
                 ButtonState::Hovered | ButtonState::Pressed => {
                     btn.state = ButtonState::Normal;
                     btn.redraw_needed = true;
-                    redraw_needed = true;
+                    request_redraw = true;
                 }
                 _ => (),
             }
         }
         self.on_leave(false);
-        redraw_needed
+        request_redraw
     }
 
     pub fn enable_saving(&mut self) {
@@ -578,33 +557,33 @@ impl Gui {
         self.timer = None
     }
 
-    pub fn on_timer(&mut self) -> RedrawLevel {
-        let mut needs_redraw = RedrawLevel::None;
+    pub fn on_timer(&mut self) -> GuiInteractionResult {
+        let mut res = GuiInteractionResult::default();
         match self.tooltip_state {
             TooltipState::FadeIn => {
                 if let Some(btn) = self.tooltip_button {
                     self.tooltip_state = TooltipState::Showing;
                     self.tooltip_x = self.buttons[btn].x;
                     self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
-                    needs_redraw = RedrawLevel::GuiOnly;
+                    res.redraw();
                 }
             }
             TooltipState::FadeOut => {
                 self.tooltip_state = TooltipState::Hidden;
-                needs_redraw = RedrawLevel::Full;
+                res.invalidate();
             }
             _ => (),
         }
-        needs_redraw
+        res
     }
 
     fn on_enter(&mut self, btn: usize) -> bool {
-        let mut needs_redraw = false;
+        let mut request_invalidate = false;
         match self.tooltip_state {
             TooltipState::Showing if Some(btn) != self.tooltip_button => {
                 self.tooltip_x = self.buttons[btn].x;
                 self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
-                needs_redraw = true;
+                request_invalidate = true;
             }
             TooltipState::Hidden => {
                 self.tooltip_state = TooltipState::FadeIn;
@@ -615,7 +594,7 @@ impl Gui {
                 if Some(btn) != self.tooltip_button {
                     self.tooltip_x = self.buttons[btn].x;
                     self.tooltip_y = self.buttons[btn].y + self.buttons[btn].height + 2;
-                    needs_redraw = true;
+                    request_invalidate = true;
                 }
                 self.tooltip_state = TooltipState::Showing;
                 self.reset_timer();
@@ -623,16 +602,16 @@ impl Gui {
             _ => (),
         }
         self.tooltip_button = Some(btn);
-        needs_redraw
+        request_invalidate
     }
 
     fn on_leave(&mut self, immediate: bool) -> bool {
         self.tooltip_button = None;
-        let mut redraw_needed = false;
+        let mut request_redraw = false;
 
         if immediate {
             if !matches!(self.tooltip_state, TooltipState::Hidden) {
-                redraw_needed = true;
+                request_redraw = true;
             }
             self.tooltip_state = TooltipState::Hidden;
             self.reset_timer();
@@ -649,6 +628,6 @@ impl Gui {
             }
             _ => (),
         };
-        redraw_needed
+        request_redraw
     }
 }
