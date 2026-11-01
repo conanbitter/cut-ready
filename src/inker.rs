@@ -6,6 +6,7 @@ use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppErr
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
+    blueprint_pixmap: Pixmap,
     stroke: Stroke,
     frame_stroke: Stroke,
     pub camera: Camera,
@@ -19,6 +20,7 @@ pub struct Inker<'a> {
 impl<'a> Inker<'a> {
     pub fn new() -> anyhow::Result<Inker<'a>> {
         let pixmap = Pixmap::new(256, 256).ok_or(AppError::InkerNew)?;
+        let blueprint_pixmap = Pixmap::new(256, 256).ok_or(AppError::InkerNew)?;
 
         let stroke = Stroke {
             width: 5.0,
@@ -50,6 +52,7 @@ impl<'a> Inker<'a> {
 
         Ok(Inker {
             pixmap,
+            blueprint_pixmap,
             stroke,
             camera: Camera::default(),
             current_blueprint: Blueprint::default(),
@@ -62,8 +65,11 @@ impl<'a> Inker<'a> {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        if let Some(new_pixmap) = Pixmap::new(width, height) {
+        if let Some(new_pixmap) = Pixmap::new(width, height)
+            && let Some(new_blueprint_pixmap) = Pixmap::new(width, height)
+        {
             self.pixmap = new_pixmap;
+            self.blueprint_pixmap = new_blueprint_pixmap;
             self.camera.resize(width as f32, height as f32);
             self.redraw_needed = true;
         }
@@ -72,11 +78,11 @@ impl<'a> Inker<'a> {
     pub fn draw(&mut self, gui: &mut Gui, show_errors: bool, show_frame: bool) -> &[u8] {
         let force = self.redraw_needed;
         if self.redraw_needed {
-            self.pixmap.fill(Color::WHITE);
+            self.blueprint_pixmap.fill(Color::WHITE);
 
             for layer in &self.current_blueprint.layers {
                 self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);
-                self.pixmap
+                self.blueprint_pixmap
                     .stroke_path(&layer.drawing, &layer.color, &self.stroke, self.camera.matrix, None);
             }
 
@@ -84,21 +90,29 @@ impl<'a> Inker<'a> {
                 self.current_blueprint.errors.update(self.camera.matrix.get_scale().0);
                 if let Some(error_path) = self.current_blueprint.errors.path.as_ref() {
                     self.camera.apply_to_stroke(CONFIG.line_widths.error, &mut self.stroke);
-                    self.pixmap
-                        .stroke_path(error_path, &self.error_paint, &self.stroke, self.camera.matrix, None);
+                    self.blueprint_pixmap.stroke_path(
+                        error_path,
+                        &self.error_paint,
+                        &self.stroke,
+                        self.camera.matrix,
+                        None,
+                    );
                 }
             }
 
-            if show_frame && let Some(frame_path) = self.frame.as_ref() {
-                self.pixmap.stroke_path(
-                    frame_path,
-                    &self.frame_paint,
-                    &self.frame_stroke,
-                    Transform::identity(),
-                    None,
-                );
-            }
+            self.pixmap.data_mut().copy_from_slice(self.blueprint_pixmap.data());
+
             self.redraw_needed = false;
+        }
+
+        if show_frame && let Some(frame_path) = self.frame.as_ref() {
+            self.pixmap.stroke_path(
+                frame_path,
+                &self.frame_paint,
+                &self.frame_stroke,
+                Transform::identity(),
+                None,
+            );
         }
 
         gui.draw(&mut self.pixmap, force);

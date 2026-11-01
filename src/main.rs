@@ -505,7 +505,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                     }
 
                     if redraw_needed {
-                        app_state.inker.redraw_needed = true;
+                        //app_state.inker.redraw_needed = true;
                         app_state.window.request_redraw();
                     } else {
                         match gui_result.needs_redraw {
@@ -587,7 +587,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             "Update frame x1={}, y1={}, x2={}, y2={}",
                             app_state.old_x, app_state.old_y, app_state.mouse_x, app_state.mouse_y
                         );*/
-                        needs_redraw = gui::RedrawLevel::Full;
+                        needs_redraw = gui::RedrawLevel::GuiOnly;
                     }
                     _ => (),
                 }
