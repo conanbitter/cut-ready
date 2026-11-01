@@ -1,10 +1,13 @@
-use tiny_skia::{BlendMode, Color, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, Transform};
+use tiny_skia::{
+    BlendMode, Color, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, StrokeDash, Transform,
+};
 
 use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, geometry::EPSILON, gui::Gui};
 
 pub struct Inker<'a> {
     pixmap: Pixmap,
     stroke: Stroke,
+    frame_stroke: Stroke,
     pub camera: Camera,
     pub current_blueprint: Blueprint<'a>,
     error_paint: Paint<'a>,
@@ -31,10 +34,18 @@ impl<'a> Inker<'a> {
         };
 
         let frame_paint = Paint {
-            anti_alias: CONFIG.anti_aliasing,
+            anti_alias: false,
             shader: tiny_skia::Shader::SolidColor(Color::from_rgba8(255, 255, 255, 255)),
             blend_mode: BlendMode::Difference,
             ..Paint::default()
+        };
+
+        let frame_stroke = Stroke {
+            width: 1.95,
+            line_join: LineJoin::Miter,
+            line_cap: LineCap::Butt,
+            dash: StrokeDash::new(vec![10.0, 3.0], 0.0),
+            ..Stroke::default()
         };
 
         Ok(Inker {
@@ -46,6 +57,7 @@ impl<'a> Inker<'a> {
             redraw_needed: true,
             frame: None,
             frame_paint,
+            frame_stroke,
         })
     }
 
@@ -78,9 +90,13 @@ impl<'a> Inker<'a> {
             }
 
             if show_frame && let Some(frame_path) = self.frame.as_ref() {
-                self.stroke.width = 1.95;
-                self.pixmap
-                    .stroke_path(frame_path, &self.frame_paint, &self.stroke, Transform::identity(), None);
+                self.pixmap.stroke_path(
+                    frame_path,
+                    &self.frame_paint,
+                    &self.frame_stroke,
+                    Transform::identity(),
+                    None,
+                );
             }
             self.redraw_needed = false;
         }
