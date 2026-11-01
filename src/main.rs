@@ -261,6 +261,8 @@ impl<'a> AppState<'a> {
     }
 
     fn draw(&mut self) -> anyhow::Result<()> {
+        let start_time = Instant::now();
+
         let data = self.inker.draw(
             &mut self.gui,
             self.show_errors,
@@ -278,6 +280,9 @@ impl<'a> AppState<'a> {
         }
 
         buffer.present().map_err(|_| AppError::SurfaceDraw)?;
+
+        let frame_duration = Instant::now().duration_since(start_time);
+        self.window.set_title(&frame_duration.as_micros().to_string());
 
         Ok(())
     }
