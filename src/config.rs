@@ -30,6 +30,13 @@ pub struct ConfLineWidths {
 }
 
 #[derive(Debug)]
+pub struct ConfDieColors {
+    pub main: i32,
+    pub cuts: i32,
+    pub marks: i32,
+}
+
+#[derive(Debug)]
 pub struct Configuration {
     pub colors: ConfigColors,
     pub window: ConfWindow,
@@ -37,6 +44,8 @@ pub struct Configuration {
     pub error_size: f32,
     pub language: Option<String>,
     pub anti_aliasing: bool,
+    pub background_color: i32,
+    pub die_colors: ConfDieColors,
 }
 
 impl Default for Configuration {
@@ -59,6 +68,12 @@ impl Default for Configuration {
             error_size: 15.0,
             language: None,
             anti_aliasing: true,
+            background_color: 0xFFFFFF,
+            die_colors: ConfDieColors {
+                main: 0x007FFF,
+                cuts: 0x008181,
+                marks: 0x000000,
+            },
         }
     }
 }
@@ -111,40 +126,6 @@ impl Configuration {
             }
         }
 
-        //Line widths
-        if let Some(JsonValue::Object(lws)) = file.get("line_widths") {
-            if let Some(width) = lws.get("main")
-                && let JsonValue::Number(width) = width
-            {
-                self.line_widths.main = *width as f32 - LINEWIDTH_BIAS;
-            }
-
-            if let Some(width) = lws.get("thick")
-                && let JsonValue::Number(width) = width
-            {
-                self.line_widths.thick = *width as f32 - LINEWIDTH_BIAS;
-            }
-
-            if let Some(width) = lws.get("thin")
-                && let JsonValue::Number(width) = width
-            {
-                self.line_widths.thin = *width as f32 - LINEWIDTH_BIAS;
-            }
-
-            if let Some(width) = lws.get("error")
-                && let JsonValue::Number(width) = width
-            {
-                self.line_widths.error = *width as f32 - LINEWIDTH_BIAS;
-            }
-        }
-
-        // Errors
-        if let Some(size) = file.get("error_size")
-            && let JsonValue::Number(size) = size
-        {
-            self.error_size = *size as f32 / 2.0;
-        }
-
         // Language
         if let Some(lang) = file.get("language")
             && let JsonValue::String(lang) = lang
@@ -153,11 +134,75 @@ impl Configuration {
             self.language = Some(lang.to_owned());
         }
 
-        // Anti-aliasing
-        if let Some(aa) = file.get("anti_aliasing")
-            && let JsonValue::Boolean(aa) = aa
-        {
-            self.anti_aliasing = *aa;
+        if let Some(JsonValue::Object(display)) = file.get("display") {
+            //Line widths
+            if let Some(JsonValue::Object(lws)) = display.get("line_widths") {
+                if let Some(width) = lws.get("main")
+                    && let JsonValue::Number(width) = width
+                {
+                    self.line_widths.main = *width as f32 - LINEWIDTH_BIAS;
+                }
+
+                if let Some(width) = lws.get("thick")
+                    && let JsonValue::Number(width) = width
+                {
+                    self.line_widths.thick = *width as f32 - LINEWIDTH_BIAS;
+                }
+
+                if let Some(width) = lws.get("thin")
+                    && let JsonValue::Number(width) = width
+                {
+                    self.line_widths.thin = *width as f32 - LINEWIDTH_BIAS;
+                }
+
+                if let Some(width) = lws.get("error")
+                    && let JsonValue::Number(width) = width
+                {
+                    self.line_widths.error = *width as f32 - LINEWIDTH_BIAS;
+                }
+            }
+
+            // Errors
+            if let Some(size) = display.get("error_size")
+                && let JsonValue::Number(size) = size
+            {
+                self.error_size = *size as f32 / 2.0;
+            }
+
+            // Anti-aliasing
+            if let Some(aa) = display.get("anti_aliasing")
+                && let JsonValue::Boolean(aa) = aa
+            {
+                self.anti_aliasing = *aa;
+            }
+
+            // Background
+            if let Some(bg_data) = display.get("background")
+                && let Some(bg) = json_to_color(bg_data)
+            {
+                self.background_color = bg;
+            }
+
+            // Die Colors
+            if let Some(JsonValue::Object(dc)) = display.get("die_colors") {
+                if let Some(color) = dc.get("main")
+                    && let Some(color) = json_to_color(color)
+                {
+                    self.die_colors.main = color;
+                }
+
+                if let Some(color) = dc.get("cuts")
+                    && let Some(color) = json_to_color(color)
+                {
+                    self.die_colors.cuts = color;
+                }
+
+                if let Some(color) = dc.get("marks")
+                    && let Some(color) = json_to_color(color)
+                {
+                    self.die_colors.marks = color;
+                }
+            }
         }
 
         Ok(())

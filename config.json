@@ -10,16 +10,26 @@
         "height": 720
     },
 
-    "line_widths": {
-        "main": 2,
-        "thick": 3,
-        "thin": 1,
-        "error": 3
-    },
+    "language": "auto",
 
-    "anti_aliasing": true,
+    "display": {
+        "background": "#FFFFFF",
 
-    "error_size": 30.0,
+        "die_colors": {
+            "main": "#007FFF",
+            "cuts": "#008181",
+            "marks": "#000000"
+        },
 
-    "language": "auto"
+        "line_widths": {
+            "main": 2,
+            "thick": 3,
+            "thin": 1,
+            "error": 3
+        },
+
+        "anti_aliasing": true,
+
+        "error_size": 30.0
+    }
 }

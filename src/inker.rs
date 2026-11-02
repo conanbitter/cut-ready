@@ -4,9 +4,17 @@ use tiny_skia::{
 
 use crate::{blueprint::Blueprint, camera::Camera, config::CONFIG, errors::AppError, geometry::EPSILON, gui::Gui};
 
+pub fn color_to_rgb(color: i32) -> (u8, u8, u8) {
+    let r = ((color >> 16) & 0xFF) as u8;
+    let g = ((color >> 8) & 0xFF) as u8;
+    let b = (color & 0xFF) as u8;
+    (r, g, b)
+}
+
 pub struct Inker<'a> {
     main_pixmap: Pixmap,
     stroke: Stroke,
+    background_color: Color,
     camera: Camera,
 
     show_errors: bool,
@@ -57,9 +65,15 @@ impl<'a> Inker<'a> {
             ..Stroke::default()
         };
 
+        let background_color = {
+            let (r, g, b) = color_to_rgb(CONFIG.background_color);
+            Color::from_rgba8(r, g, b, 255)
+        };
+
         Ok(Inker {
             main_pixmap: pixmap,
             stroke,
+            background_color,
             camera: Camera::default(),
 
             show_errors: false,
@@ -96,7 +110,7 @@ impl<'a> Inker<'a> {
         if self.blueprint_dirty {
             self.window_dirty = true;
 
-            self.blueprint_pixmap.fill(Color::WHITE);
+            self.blueprint_pixmap.fill(self.background_color);
 
             for layer in &self.current_blueprint.layers {
                 self.camera.apply_to_stroke(layer.line_width, &mut self.stroke);

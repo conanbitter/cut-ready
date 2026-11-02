@@ -448,7 +448,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     if let Some(path) = marks_pb.finish() {
         layers.push(new_layer(
             path,
-            DEFAULT_MARKS_COLOR,
+            CONFIG.die_colors.marks,
             CONFIG.line_widths.thin,
             blueprint::LineType::Marks,
         ));
@@ -456,7 +456,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     if let Some(path) = cuts_pb.finish() {
         layers.push(new_layer(
             path,
-            DEFAULT_CUTS_COLOR,
+            CONFIG.die_colors.cuts,
             CONFIG.line_widths.thick,
             blueprint::LineType::Cuts,
         ));
@@ -464,7 +464,7 @@ pub fn load_die<'a>(filename: impl AsRef<Path>) -> anyhow::Result<Blueprint<'a>>
     if let Some(path) = main_pb.finish() {
         layers.push(new_layer(
             path,
-            DEFAULT_MAIN_COLOR,
+            CONFIG.die_colors.main,
             CONFIG.line_widths.main,
             blueprint::LineType::Main,
         ));
