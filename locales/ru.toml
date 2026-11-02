@@ -63,7 +63,6 @@ other = "другое"
 
 
 [convert]
-success_title = "Успех"
-success_text = "Файл успешно сконвертирован!"
+title_mod = "сконвертирован"
 error_title = "Ошибка"
 error_text = "Ошибка при конвертации файла"

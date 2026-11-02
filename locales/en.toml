@@ -62,7 +62,6 @@ marks = "marks"
 other = "other"
 
 [convert]
-success_title = "Success"
-success_text = "File successfully converted!"
+title_mod = "converted"
 error_title = "Error"
 error_text = "Error converting file"

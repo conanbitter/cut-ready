@@ -433,11 +433,14 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
             UserEvent::FileSaveSelected(Some(path)) => {
                 if let Some(die_filename) = app_state.current_filename.as_ref() {
                     match convert_die(die_filename, path) {
-                        Ok(_) => app_state.message_box(
-                            &t!("convert.success_title"),
-                            &t!("convert.success_text"),
-                            MessageLevel::Info,
-                        ),
+                        Ok(_) => {
+                            if let Some(filename) = die_filename.file_name() {
+                                app_state.window.set_title(
+                                    format!("{} ({}) - Cut Ready", filename.display(), t!("convert.title_mod"))
+                                        .as_str(),
+                                );
+                            }
+                        }
                         Err(err) => app_state.message_box(
                             &t!("convert.error_title"),
                             format!("{}:\n{}", t!("convert.error_text"), err).as_str(),
