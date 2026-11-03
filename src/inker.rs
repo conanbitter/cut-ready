@@ -167,6 +167,16 @@ impl<'a> Inker<'a> {
         self.blueprint_dirty = true;
     }
 
+    pub fn show_frame(&mut self) {
+        self.frame_show = true;
+        self.window_dirty = true;
+    }
+
+    pub fn hide_frame(&mut self) {
+        self.frame_show = false;
+        self.window_dirty = true;
+    }
+
     pub fn update_frame(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
         let mut pb = if let Some(path) = self.frame.take() {
             path.clear()
@@ -194,7 +204,6 @@ impl<'a> Inker<'a> {
 
         pb.push_rect(rect);
         self.frame = pb.finish();
-        self.frame_show = true;
         self.window_dirty = true;
     }
 
@@ -218,7 +227,6 @@ impl<'a> Inker<'a> {
 
         let rect = Rect::from_ltrb(left, top, right, bottom).unwrap(); // checked before
         self.camera.show_all(&rect);
-        self.frame_show = false;
         self.blueprint_dirty = true;
     }
 

@@ -509,10 +509,12 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                         let dirty = match button {
                             MouseButton::Left => {
                                 app_state.mouse_action = MouseAction::Drag;
+                                app_state.inker.hide_frame();
                                 true
                             }
                             MouseButton::Right => {
                                 app_state.mouse_action = MouseAction::Frame;
+                                app_state.inker.show_frame();
                                 app_state.inker.update_frame(
                                     app_state.old_x as f32,
                                     app_state.old_y as f32,
@@ -540,6 +542,7 @@ impl<'a> ApplicationHandler<UserEvent> for App<'a> {
                             app_state.mouse_x as f32,
                             app_state.mouse_y as f32,
                         );
+                        app_state.inker.hide_frame();
                         app_state.inker.invalidate();
                         app_state.window.request_redraw();
                     }
