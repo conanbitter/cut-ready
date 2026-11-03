@@ -9,12 +9,12 @@ use walkdir::WalkDir;
 
 use crate::diereader::convert_die;
 
-const CLI_LOGO: &str = "  _____     __     ___              __    
- / ___/_ __/ /_   / _ \\___ ___ ____/ /_ __
+const CLI_LOGO: &str = r#"
+  _____     __     ___              __    
+ / ___/_ __/ /_   / _ \___ ___ ____/ /_ __
 / /__/ // / __/  / , _/ -_) _ `/ _  / // /
-\\___/\\_,_/\\__/  /_/|_|\\__/\\_,_/\\_,_/\\_, / 
-                                   /___/
-";
+\___/\_,_/\__/  /_/|_|\__/\_,_/\_,_/\_, / 
+                                   /___/ "#;
 
 #[cfg(all(not(debug_assertions), windows))]
 fn attach_console() {
@@ -35,6 +35,8 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
     let mut include_subdirs = false;
     let mut input: Option<PathBuf> = None;
     let mut output: Option<PathBuf> = None;
+
+    let version = env!("CARGO_PKG_VERSION");
 
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
@@ -58,7 +60,7 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
     if help {
         #[cfg(all(not(debug_assertions), windows))]
         attach_console();
-        println!("{}", CLI_LOGO);
+        println!("{}v{}", CLI_LOGO, version);
         println!("{}", t!("cli.help"));
         return None;
     }
