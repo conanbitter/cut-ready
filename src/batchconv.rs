@@ -78,7 +78,7 @@ pub fn try_batch_convert() -> Option<Option<PathBuf>> {
     #[cfg(all(not(debug_assertions), windows))]
     attach_console();
 
-    println!("{}", CLI_LOGO);
+    println!("{}v{}", CLI_LOGO, version);
 
     if let Some(input) = input {
         if !input.exists() {
